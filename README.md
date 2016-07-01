@@ -414,6 +414,15 @@ Generate a random number between two numbers.
 anime.random(10, 40); // Will return a random number between 10 and 40
 ```
 
+### anime.includes(arr,value)
+
+checks whether a string, array or arraylike object contains
+a certain value
+
+```javascript
+anime.includes([1,2,3,4], 4); // -> true returns true there is indeed a 4 in the array
+```
+
 ====
 
 [MIT License](LICENSE.md). © 2016 [Julian Garnier](http://juliangarnier.com).
