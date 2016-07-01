@@ -117,7 +117,7 @@
         var _arguments = arguments;
         if (!options.stop) {
           (function() {
-            var args = Array.from(_arguments).slice(1);
+            var args = Array.prototype.slice.call(_arguments, 1);
             options.evtlisteners.forEach(function(ln) {
               if (ln.etype == type && !options.stop) ln.apply(obj, args);
             });
