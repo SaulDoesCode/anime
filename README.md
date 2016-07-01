@@ -42,7 +42,7 @@ var myAnimation = anime({
 * Safari
 * Opera
 * Firefox
-* IE 10+
+* IE 11+
 
 ### Quick start
 

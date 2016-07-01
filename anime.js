@@ -88,7 +88,7 @@
             },
             emit(type) {
                 if (!options.stop) {
-                    let args = Array.from(arguments).slice(1);
+                    let args = Array.prototype.slice.call(arguments,1);
                     options.evtlisteners.forEach(ln => {
                         if (ln.etype == type && !options.stop) ln.apply(obj, args);
                     });
@@ -640,6 +640,7 @@
     animation.mergeObjs = mergeObjs;
     animation.flattenArr = flattenArr;
     animation.removeArrDupes = removeArrDupes;
+    animation.eventemitter = eventemitter;
 
     animation.play = engine.play;
     animation.pause = engine.pause;

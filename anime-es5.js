@@ -23,10 +23,7 @@
       direction: 'normal',
       easing: 'easeOutElastic',
       elasticity: 400,
-      round: false,
-      begin: undef,
-      update: undef,
-      complete: undef
+      round: false
     }; // Utils
   function includes(arr, searchElement) {
     if (arr.includes) return arr.includes(searchElement);
@@ -36,53 +33,119 @@
     });
   }
   var is = function() {
-      return {
-        array: Array.isArray,
-        object: function(a) {
-          return includes(Object.prototype.toString.call(a), 'Object');
-        },
-        html: function(a) {
-          return a instanceof NodeList || a instanceof HTMLCollection;
-        },
-        node: function(a) {
-          return a.nodeType;
-        },
-        svg: function(a) {
-          return a instanceof SVGElement;
-        },
-        number: function(a) {
-          return !isNaN(parseInt(a));
-        },
-        string: function(a) {
-          return typeof a === 'string';
-        },
-        func: function(a) {
-          return typeof a === 'function';
-        },
-        undef: function(a) {
-          return typeof a === 'undefined';
-        },
-        null: function(a) {
-          return typeof a === 'null';
-        },
-        hex: function(a) {
-          return (/(^#[0-9A-F]{6}$)|(^#[0-9A-F]{3}$)/i.test(a));
-        },
-        rgb: function(a) {
-          return (/^rgb/.test(a));
-        },
-        rgba: function(a) {
-          return (/^rgba/.test(a));
-        },
-        hsl: function(a) {
-          return (/^hsl/.test(a));
-        },
-        color: function(a) {
-          return is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a);
+    return {
+      array: Array.isArray,
+      object: function(a) {
+        return includes(Object.prototype.toString.call(a), 'Object');
+      },
+      html: function(a) {
+        return a instanceof NodeList || a instanceof HTMLCollection;
+      },
+      node: function(a) {
+        return a.nodeType;
+      },
+      bool: function(a) {
+        return typeof a === 'boolean';
+      },
+      svg: function(a) {
+        return a instanceof SVGElement;
+      },
+      number: function(a) {
+        return !isNaN(parseInt(a));
+      },
+      string: function(a) {
+        return typeof a === 'string';
+      },
+      func: function(a) {
+        return typeof a === 'function';
+      },
+      undef: function(a) {
+        return typeof a === 'undefined';
+      },
+      null: function(a) {
+        return typeof a === 'null';
+      },
+      hex: function(a) {
+        return (/(^#[0-9A-F]{6}$)|(^#[0-9A-F]{3}$)/i.test(a));
+      },
+      rgb: function(a) {
+        return (/^rgb/.test(a));
+      },
+      rgba: function(a) {
+        return (/^rgba/.test(a));
+      },
+      hsl: function(a) {
+        return (/^hsl/.test(a));
+      },
+      color: function(a) {
+        return is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a);
+      }
+    };
+  }();
+
+  function eventemitter(obj) {
+    var options = {
+      evtlisteners: new Set(),
+      stop: false,
+      on: function(type, func) {
+        if (!is.func(func)) throw new TypeError('.on(' + type + ',func) : func is not a function');
+        func.etype = type;
+        options.evtlisteners.add(func);
+        return {
+          on: function() {
+            func.etype = type;
+            options.evtlisteners.add(func);
+            return options;
+          },
+          off: function() {
+            return options.off(func);
+          }
+        };
+      },
+      once: function(type, func) {
+        function funcwrapper() {
+          func.apply(obj, arguments);
+          options.off(funcwrapper);
         }
-      };
-    }(),
-    easings = function() {
+        options.on(type, funcwrapper);
+      },
+      off: function(func) {
+        if (options.evtlisteners.has(func)) options.evtlisteners.delete(func);
+        return options;
+      },
+      emit: function(type) {
+        var _arguments = arguments;
+        if (!options.stop) {
+          (function() {
+            var args = Array.from(_arguments).slice(1);
+            options.evtlisteners.forEach(function(ln) {
+              if (ln.etype == type && !options.stop) ln.apply(obj, args);
+            });
+          })();
+        }
+        return options;
+      },
+      stopall: function(stop) {
+        options.stop = is.bool(stop) ? stop : true;
+      },
+      defineHandle: function(name, type) {
+        if (!type) type = name;
+        this[name] = function(fn, once) {
+          return options[once == true ? 'once' : 'on'](type, fn);
+        };
+        return options;
+      }
+    };
+    Object.keys(options).forEach(function(key) {
+      Object.defineProperty(obj, key, {
+        value: options[key],
+        enumerable: false,
+        writable: false
+      });
+    });
+    return obj;
+  } // Easings functions adapted from http://jqueryui.com/
+  var easings = function() {
       var eases = {},
         functions = {
           Sine: function(t) {
@@ -456,7 +519,7 @@
         for (var t in transforms) {
           anim.animatables[t].target.style.transform = transforms[t].join(' ');
         }
-      if (anim.settings.update) anim.settings.update(anim);
+      anim.emit('update', anim);
       return anim;
     }, // Animation
     createAnimation = function(params) {
@@ -474,7 +537,7 @@
       anim.duration = anim.tweens.length ? Math.max.apply(Math, anim.tweens.map(function(tween) {
         return tween.totalDuration;
       })) : params.duration / animation.speed;
-      return anim;
+      return eventemitter(anim);
     },
     animations = [],
     raf = void 0,
@@ -506,8 +569,7 @@
           time.current = time.last + now - time.start;
           var s = anim.settings;
           if (!anim.began && s.begin && time.current >= s.delay) {
-            if (is.func(s.begin)) s.begin(anim);
-            if (is.func(anim.began_resolve)) anim.began_resolve(anim);
+            anim.emit('begin', anim);
             anim.started = true;
           }
           setAnimationProgress(anim, time.current);
@@ -520,8 +582,7 @@
               anim.ended = true;
               anim.pause();
               anim.started = false;
-              if (is.func(s.complete)) s.complete(anim);
-              if (is.func(anim.completed_resolve)) anim.completed_resolve(anim);
+              anim.emit('complete');
             }
           }
           time.last = 0;
@@ -532,6 +593,7 @@
       };
       anim.pause = function() {
         anim.running = false;
+        anim.emit('paused', anim);
         removeWillChange(anim);
         var i = animations.indexOf(anim);
         if (i > -1) animations.splice(i, 1);
@@ -554,30 +616,26 @@
       };
       anim.restart = function() {
         if (anim.reversed) reverseTweens(anim);
+        anim.emit('restart', anim);
         anim.pause();
         anim.seek(0);
         return anim.play();
       };
-      var callbacks = function(type) {
-        return function(callback) {
-          anim.settings[type] = is.func(callback) ? callback : undefined;
-          return anim;
+
+      function commonEvents(type) {
+        anim[type] = function(fn) {
+          if (is.func(fn)) {
+            var listener = anim.on(type, fn.bind(anim));
+            return {
+              anim: anim,
+              listener: listener
+            };
+          }
         };
-      };
-      anim.begin = callbacks('begin');
-      anim.update = callbacks('update');
-      anim.complete = callbacks('complete');
-      var promise = function(type) {
-        if (typeof Promise !== "undefined") return function() {
-          return new Promise(function(resolve) {
-            anim[type + '_resolve'] = resolve;
-          });
-        };
-        console.warn('Your browser doesn\'t support promises.');
-      };
-      anim.began = promise('began');
-      anim.updated = promise('updated');
-      anim.completed = promise('completed');
+      }
+      commonEvents('begin');
+      commonEvents('update');
+      commonEvents('complete');
       if (anim.settings.autoplay) anim.play();
       return anim;
     }, // Remove on one or multiple targets from all active animations.
@@ -596,8 +654,7 @@
           }
         }
       }
-    }; // Easings functions adapted from http://jqueryui.com/
-  // Strings
+    }; // Strings
   // Public
   animation.speed = 1;
   animation.list = animations;
@@ -611,6 +668,7 @@
   animation.mergeObjs = mergeObjs;
   animation.flattenArr = flattenArr;
   animation.removeArrDupes = removeArrDupes;
+  animation.eventemitter = eventemitter;
   animation.play = engine.play;
   animation.pause = engine.pause;
   return animation;
