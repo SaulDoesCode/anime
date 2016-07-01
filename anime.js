@@ -27,6 +27,7 @@
             autoplay: true,
             direction: 'normal',
             easing: 'easeOutElastic',
+            reversed: false,
             elasticity: 400,
             round: false
         };
@@ -61,19 +62,20 @@
     function eventemitter(obj) {
         let options = {
             evtlisteners: new Set,
-            stop: false,
+            __stop: false,
             on(type, func) {
                 if (!is.func(func)) throw new TypeError(`.on(${type},func) : func is not a function`);
                 func.etype = type;
-                options.evtlisteners.add(func);
-                return {
+                func.ehandle = {
                     on() {
                         func.etype = type;
                         options.evtlisteners.add(func);
                         return options;
                     },
                     off: () => options.off(func),
-                }
+                };
+                options.evtlisteners.add(func);
+                return func.ehandle;
             },
             once(type, func) {
                 function funcwrapper() {
@@ -81,6 +83,7 @@
                     options.off(funcwrapper);
                 }
                 options.on(type, funcwrapper);
+                return options;
             },
             off(func) {
                 if (options.evtlisteners.has(func)) options.evtlisteners.delete(func);
@@ -88,20 +91,15 @@
             },
             emit(type) {
                 if (!options.stop) {
-                    let args = Array.prototype.slice.call(arguments,1);
+                    let args = Array.prototype.slice.call(arguments, 1);
                     options.evtlisteners.forEach(ln => {
-                        if (ln.etype == type && !options.stop) ln.apply(obj, args);
+                        if (ln.etype == type && !options.__stop) ln.apply(obj, args.concat(ln.ehandle));
                     });
                 }
                 return options;
             },
             stopall(stop) {
-                options.stop = is.bool(stop) ? stop : true;
-            },
-            defineHandle(name, type) {
-                if (!type) type = name;
-                this[name] = (fn, once) => options[once == true ? 'once' : 'on'](type, fn);
-                return options;
+                options.__stop = is.bool(stop) ? stop : true;
             },
         };
         Object.keys(options).forEach(key => {
@@ -387,7 +385,7 @@
                 tween.to = fromVal;
                 if (delays) tween.delay = delayVal;
             });
-            anim.reversed = anim.reversed ? false : true; // what??? why
+            anim.reversed = !!anim.reversed;
         },
 
         // will-change
@@ -493,7 +491,7 @@
                 time: 0,
                 progress: 0,
                 running: false,
-                began: false,
+                started: false,
                 ended: false
             };
             anim.properties = getProperties(params, anim.settings);
@@ -504,36 +502,38 @@
 
     // Public
 
-    let animations = [],
-        raf;
+    let animations = [];
 
-    const engine = (() => {
-        const play = () => (raf = requestAnimationFrame(step)),
-            pause = () => {
-                cancelAnimationFrame(raf);
-                raf = 0;
-            },
-            step = time => {
-                for (let i = 0; i < animations.length; i++) animations[i].tick(time);
-                play();
-            }
-        return {
-            play,
-            pause
+    const engine = {
+        raf: 0,
+        play() {
+            engine.raf = requestAnimationFrame(engine.step);
+        },
+        pause() {
+            cancelAnimationFrame(engine.raf);
+            engine.raf = 0;
+        },
+        step(time) {
+            for (let i = 0; i < animations.length; i++) animations[i].tick(time);
+            engine.play();
         }
-    })();
+    };
 
     const animation = params => {
             let time = {},
                 anim = createAnimation(params);
+
+            ['complete', 'begin', 'update'].forEach(type => {
+                if (is.func(anim.settings[type])) anim.once(type, anim.settings.complete);
+            });
 
             anim.tick = now => {
                 if (anim.running) {
                     anim.ended = false;
                     time.current = time.last + now - time.start;
                     let s = anim.settings;
-                    if (!anim.began && s.begin && time.current >= s.delay) {
-                        anim.emit('begin', anim);
+                    if (time.current >= s.delay) {
+                        if (!anim.started) anim.emit('begin', anim);
                         anim.started = true;
                     }
                     setAnimationProgress(anim, time.current);
@@ -546,7 +546,7 @@
                             anim.ended = true;
                             anim.pause();
                             anim.started = false;
-                            anim.emit('complete');
+                            anim.emit('complete', anim);
                         }
                     }
                     time.last = 0;
@@ -576,7 +576,7 @@
                 if (s.direction === 'alternate' && !s.loop) s.loop = 1;
                 setWillChange(anim);
                 animations.push(anim);
-                if (!raf) engine.play();
+                if (engine.raf == 0) engine.play();
                 return anim;
             };
 
@@ -588,21 +588,21 @@
                 return anim.play();
             };
 
-            function commonEvents(type) {
-                anim[type] = fn => {
-                    if (is.func(fn)) {
-                        const listener = anim.on(type, fn.bind(anim));
-                        return {
-                            anim,
-                            listener
-                        }
-                    }
+            if (typeof Promise !== "undefined") {
+                function promise(type) {
+                    Object.defineProperty(anim, type, {
+                        get() {
+                            return new Promise(pass => {
+                                anim.once(type, pass);
+                            });
+                        },
+                    });
                 }
-            }
 
-            commonEvents('begin');
-            commonEvents('update');
-            commonEvents('complete');
+                anim.completed = promise('complete');
+                anim.began = promise('begin');
+
+            } else console.warn("anime : Your browser doesn't support promises.");
 
             if (anim.settings.autoplay) anim.play();
 
@@ -628,6 +628,23 @@
             }
         };
 
+    if (typeof Promise !== "undefined") {
+
+        animation.alldone = function () {
+            const anims = flattenArr(arguments);
+            return new Promise(pass => {
+                let i = 1;
+                anims.forEach(anim => {
+                    anim.once('complete', () => {
+                        if (i++ === anims.length) pass(anims);
+                    });
+                });
+            });
+        }
+
+    }
+
+
     animation.speed = 1;
     animation.list = animations;
     animation.remove = remove;
@@ -641,7 +658,6 @@
     animation.flattenArr = flattenArr;
     animation.removeArrDupes = removeArrDupes;
     animation.eventemitter = eventemitter;
-
     animation.play = engine.play;
     animation.pause = engine.pause;
 

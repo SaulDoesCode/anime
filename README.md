@@ -143,7 +143,7 @@ anime({
   targets: 'div',
   translateX: '13.5rem',
   scale: [.75, .9],
-  delay: function(el, index) {
+  delay(el, index) {
     return index * 80;
   },
   direction: 'alternate',
@@ -225,7 +225,7 @@ Examples:
 ```javascript
 anime({
   targets: 'div',
-  translateX: function(el, index) {
+  translateX(el, index) {
     return anime.random(50, 100); // Will set a random value from 50 to 100 to each divs
   }
 });
@@ -236,7 +236,7 @@ anime({
 ```javascript
 anime({
   targets: 'path',
-  strokeDashoffset: function(el) {
+  strokeDashoffset(el) {
     var pathLength = el.getTotalLength();
     return [pathLength, 0]; // Will use the exact path length for each targeted path elements
   }
@@ -251,43 +251,44 @@ anime({
 
 Play, pause, restart, seek, rumtime callback and Promise in the animation.
 
-| Names | Infos | Return | Parameters
+| Names | Info | Return | Parameters
 | --- | --- | --- | --- | ---
 | `.play()` | Play the animation | animation object | animation parameters object
 | `.pause()` | Pause the animation | animation object | none
 | `.restart()` | Restart the animation | animation object | animation parameters object
 | `.seek()` | Advance in the animation | animation object | a percentage, or an object {time: 1250}
-| `.begin()` | Callback at animation began, replace begin in the anime's options | animation object | function(anim), or none(Callback is disabled.)
-| `.update()` | Callback at animation updated, replace update in the anime's options | animation object | function(anim), or none(Callback is disabled.)
-| `.complete()` | Callback at animation ended, replace complete in the anime's options | animation object | function(anim), or none(Callback is disabled.)
-| `.began()` | Promise at animation began | Promise object | none
-| `.update()` | Promise at animation updated | Promise object | none
-| `.complete()` | Promise at animation ended | Promise object | none
+| `.begin()` | Callback at animation began, replace begin in the anime's options | { animation object , listener } | function(anim)
+| `.update()` | Callback at animation updated, replace update in the anime's options | { animation object , listener } | function(anim)
+| `.complete()` | Callback at animation ended, replace complete in the anime's options | { animation object , listener } | function(anim)
 
 ```javascript
-var myAnimation = anime({
-  targets: 'div',
-  translateX: 100,
-  loop: false,
-  autoplay: false
-});
+    var myAnimation = anime({
+      targets: 'div',
+      translateX: 100,
+      loop: false,
+      autoplay: false
+    });
 
-// Chainable Playback with runtime callback
-myAnimation
-.begin(function(anim) {
-  console.log("Began!"); // Called the animation began.
-}).play() // Manually play the animation.
-.update(function(anim) {
-  console.log("Updated!"); // Called the animation updated.
-})
-.complete(function(anim) {
-  console.log("Completed!"); // Called the animation ended.
-  anim
-  .complete(function(anim) { // Changed complete callback.
-    console.log("Fully completed!");
-  })
-  .play(); // Manually play one more time.
-});
+    myAnimation.begin(anim => {
+      console.log("Began!"); // Called the animation began.
+    });
+
+    myAnimation.complete(anim => {
+        console.log("Completed!"); // Called the animation ended.
+    });
+
+    let listener = myAnimation.on('update', anim => {
+      console.log("Updated!"); // Called the animation updated.
+    });
+    listener.off();
+
+    // all of the above events may be accessed via the .on or .once methods
+    myAnimation.once('pause',(anim,listener) => {
+      console.log("the animation was paused!"); // called on pause
+      setTimeout(anim.play, 1500);
+    });
+
+
 ```
 
 Promise support
