@@ -60,6 +60,7 @@
     }))();
 
     function eventemitter(obj) {
+        if(!obj) obj = {};
         let options = {
             evtlisteners: new Set,
             __stop: false,
@@ -70,9 +71,12 @@
                     on() {
                         func.etype = type;
                         options.evtlisteners.add(func);
-                        return options;
+                        return func.ehandle;
                     },
-                    off: () => options.off(func),
+                    off: () => {
+                      options.off(func);
+                      return func.ehandle;
+                    },
                 };
                 options.evtlisteners.add(func);
                 return func.ehandle;
