@@ -527,7 +527,7 @@
                 anim = createAnimation(params);
 
             ['complete', 'begin', 'update'].forEach(type => {
-                if (is.func(anim.settings[type])) anim.once(type, anim.settings[type]);
+                if (is.func(anim.settings[type])) anim[type == 'update' ? 'on':'once'](type, anim.settings[type]);
             });
 
             anim.tick = now => {
