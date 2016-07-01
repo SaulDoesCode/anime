@@ -257,9 +257,8 @@ Play, pause, restart, seek, rumtime callback and Promise in the animation.
 | `.pause()` | Pause the animation | animation object | none
 | `.restart()` | Restart the animation | animation object | animation parameters object
 | `.seek()` | Advance in the animation | animation object | a percentage, or an object {time: 1250}
-| `.begin()` | Callback at animation began, replace begin in the anime's options | { animation object , listener } | function(anim)
-| `.update()` | Callback at animation updated, replace update in the anime's options | { animation object , listener } | function(anim)
-| `.complete()` | Callback at animation ended, replace complete in the anime's options | { animation object , listener } | function(anim)
+| `.begin` | Callback at animation began, replace begin in the anime's options | Promise | function(anim)
+| `.complete` | Callback at animation ended, replace complete in the anime's options | Promise | function(anim)
 
 ```javascript
     var myAnimation = anime({
@@ -269,11 +268,11 @@ Play, pause, restart, seek, rumtime callback and Promise in the animation.
       autoplay: false
     });
 
-    myAnimation.begin(anim => {
+    myAnimation.once('begin',anim => {
       console.log("Began!"); // Called the animation began.
     });
 
-    myAnimation.complete(anim => {
+    myAnimation.once('complete',anim => {
         console.log("Completed!"); // Called the animation ended.
     });
 
@@ -296,19 +295,36 @@ Promise support
 
 
 // Promise support
-Promise.all([myAnimation.completed()]).then(function(anims) {
-  console.log("Resolved all promise!");
-});
+let anims = Array.from(document.querySelectorAll('div'))
+            .map(el => anime({
+                targets: el,
+                translateY : -30,
+                duration:anime.random(100,2000)
+            }));
 
-// And
-myAnimation.began().then(function(anim) {
-  console.log("Resolved began promise!");
-});
+  anime.alldone(anims).then(anims => {
+    console.log('all done! :D',anims);
+  });
 
-// And
-myAnimation.updated().then(function(anim) {
-  console.log("Resolved updated promise!");
-});
+  anims[0].begin.then(anim => {
+    console.log('animation started!');
+  });
+  anims[1].begin.then(anim => {
+    console.log('animation started!');
+  });
+  anims[2].begin.then(anim => {
+    console.log('animation started!');
+  });
+
+  anims[0].complete.then(anim => {
+    console.log('1 done!!');
+  });
+  anims[1].complete.then(anim => {
+    console.log('2 done!!');
+  });
+  anims[2].complete.then(anim => {
+    console.log('3 done!!');
+  });
 ```
 
 [Live example on CodePen](http://codepen.io/juliangarnier/pen/d1cf92b2af5bb4166cde511e233e8a0d?editors=0010)

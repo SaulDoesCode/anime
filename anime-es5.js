@@ -22,6 +22,7 @@
       autoplay: true,
       direction: 'normal',
       easing: 'easeOutElastic',
+      reversed: false,
       elasticity: 400,
       round: false
     }; // Utils
@@ -86,12 +87,11 @@
   function eventemitter(obj) {
     var options = {
       evtlisteners: new Set(),
-      stop: false,
+      __stop: false,
       on: function(type, func) {
         if (!is.func(func)) throw new TypeError('.on(' + type + ',func) : func is not a function');
         func.etype = type;
-        options.evtlisteners.add(func);
-        return {
+        func.ehandle = {
           on: function() {
             func.etype = type;
             options.evtlisteners.add(func);
@@ -101,6 +101,8 @@
             return options.off(func);
           }
         };
+        options.evtlisteners.add(func);
+        return func.ehandle;
       },
       once: function(type, func) {
         function funcwrapper() {
@@ -108,6 +110,7 @@
           options.off(funcwrapper);
         }
         options.on(type, funcwrapper);
+        return options;
       },
       off: function(func) {
         if (options.evtlisteners.has(func)) options.evtlisteners.delete(func);
@@ -119,21 +122,14 @@
           (function() {
             var args = Array.prototype.slice.call(_arguments, 1);
             options.evtlisteners.forEach(function(ln) {
-              if (ln.etype == type && !options.stop) ln.apply(obj, args);
+              if (ln.etype == type && !options.__stop) ln.apply(obj, args.concat(ln.ehandle));
             });
           })();
         }
         return options;
       },
       stopall: function(stop) {
-        options.stop = is.bool(stop) ? stop : true;
-      },
-      defineHandle: function(name, type) {
-        if (!type) type = name;
-        this[name] = function(fn, once) {
-          return options[once == true ? 'once' : 'on'](type, fn);
-        };
-        return options;
+        options.__stop = is.bool(stop) ? stop : true;
       }
     };
     Object.keys(options).forEach(function(key) {
@@ -429,7 +425,7 @@
         tween.to = fromVal;
         if (delays) tween.delay = delayVal;
       });
-      anim.reversed = anim.reversed ? false : true; // what??? why
+      anim.reversed = !!anim.reversed;
     }, // will-change
     getWillChange = function(anim) {
       var props = [],
@@ -529,7 +525,7 @@
         time: 0,
         progress: 0,
         running: false,
-        began: false,
+        started: false,
         ended: false
       };
       anim.properties = getProperties(params, anim.settings);
@@ -540,36 +536,35 @@
       return eventemitter(anim);
     },
     animations = [],
-    raf = void 0,
-    engine = function() {
-      var play = function() {
-          return raf = requestAnimationFrame(step);
-        },
-        pause = function() {
-          cancelAnimationFrame(raf);
-          raf = 0;
-        },
-        step = function(time) {
-          for (var i = 0; i < animations.length; i++) {
-            animations[i].tick(time);
-          }
-          play();
-        };
-      return {
-        play: play,
-        pause: pause
-      };
-    }(),
+    engine = {
+      raf: 0,
+      play: function() {
+        engine.raf = requestAnimationFrame(engine.step);
+      },
+      pause: function() {
+        cancelAnimationFrame(engine.raf);
+        engine.raf = 0;
+      },
+      step: function(time) {
+        for (var i = 0; i < animations.length; i++) {
+          animations[i].tick(time);
+        }
+        engine.play();
+      }
+    },
     animation = function(params) {
       var time = {},
         anim = createAnimation(params);
+      ['complete', 'begin', 'update'].forEach(function(type) {
+        if (is.func(anim.settings[type])) anim.once(type, anim.settings.complete);
+      });
       anim.tick = function(now) {
         if (anim.running) {
           anim.ended = false;
           time.current = time.last + now - time.start;
           var s = anim.settings;
-          if (!anim.began && s.begin && time.current >= s.delay) {
-            anim.emit('begin', anim);
+          if (time.current >= s.delay) {
+            if (!anim.started) anim.emit('begin', anim);
             anim.started = true;
           }
           setAnimationProgress(anim, time.current);
@@ -582,7 +577,7 @@
               anim.ended = true;
               anim.pause();
               anim.started = false;
-              anim.emit('complete');
+              anim.emit('complete', anim);
             }
           }
           time.last = 0;
@@ -611,7 +606,7 @@
         if (s.direction === 'alternate' && !s.loop) s.loop = 1;
         setWillChange(anim);
         animations.push(anim);
-        if (!raf) engine.play();
+        if (engine.raf == 0) engine.play();
         return anim;
       };
       anim.restart = function() {
@@ -621,21 +616,19 @@
         anim.seek(0);
         return anim.play();
       };
-
-      function commonEvents(type) {
-        anim[type] = function(fn) {
-          if (is.func(fn)) {
-            var listener = anim.on(type, fn.bind(anim));
-            return {
-              anim: anim,
-              listener: listener
-            };
-          }
+      if (typeof Promise !== "undefined") {
+        var promise = function(type) {
+          Object.defineProperty(anim, type, {
+            get: function() {
+              return new Promise(function(pass) {
+                anim.once(type, pass);
+              });
+            }
+          });
         };
-      }
-      commonEvents('begin');
-      commonEvents('update');
-      commonEvents('complete');
+        anim.completed = promise('complete');
+        anim.began = promise('begin');
+      } else console.warn("anime : Your browser doesn't support promises.");
       if (anim.settings.autoplay) anim.play();
       return anim;
     }, // Remove on one or multiple targets from all active animations.
@@ -656,6 +649,19 @@
       }
     }; // Strings
   // Public
+  if (typeof Promise !== "undefined") {
+    animation.alldone = function() {
+      var anims = flattenArr(arguments);
+      return new Promise(function(pass) {
+        var i = 1;
+        anims.forEach(function(anim) {
+          anim.once('complete', function() {
+            if (i++ === anims.length) pass(anims);
+          });
+        });
+      });
+    };
+  }
   animation.speed = 1;
   animation.list = animations;
   animation.remove = remove;

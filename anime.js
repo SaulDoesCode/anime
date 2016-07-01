@@ -588,7 +588,7 @@
                 return anim.play();
             };
 
-            if (typeof Promise !== "undefined") {
+            if (typeof Promise != "undefined") {
                 function promise(type) {
                     Object.defineProperty(anim, type, {
                         get() {
@@ -599,8 +599,8 @@
                     });
                 }
 
-                anim.completed = promise('complete');
-                anim.began = promise('begin');
+                promise('complete');
+                promise('begin');
 
             } else console.warn("anime : Your browser doesn't support promises.");
 
