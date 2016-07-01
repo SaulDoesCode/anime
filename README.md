@@ -7,7 +7,7 @@ It works with CSS, Individual Transforms, SVG, DOM attributes and JS Objects.
 * [Specific animation parameters](#specific-animation-parameters)
 * [Specific target values](#specific-target-values)
 * [Multiple timing values](#multiple-timing-values)
-* [Playback controls(Promise support)](#playback-controls)
+* [Playback controls](#playback-controls)
 * [Motion path](#motion-path)
 
 
@@ -42,7 +42,7 @@ var myAnimation = anime({
 * Safari
 * Opera
 * Firefox
-* IE 11+
+* IE 10+
 
 ### Quick start
 
@@ -52,6 +52,12 @@ Then insert `anime.min.js` in your html:
 
 ```html
 <script src="anime.min.js"></script>
+```
+
+Or import it in your JavaScript
+
+```javascript
+import anime from 'animejs'
 ```
 
 ## API
@@ -143,7 +149,7 @@ anime({
   targets: 'div',
   translateX: '13.5rem',
   scale: [.75, .9],
-  delay(el, index) {
+  delay: function(el, index) {
     return index * 80;
   },
   direction: 'alternate',
@@ -175,8 +181,6 @@ Defines the end value of the animation.
 | --- | --- | ---
 | String | `'100rem'` | Recommended technique. Will force the animation to use a specific value, but doesn't convert units.
 | Number | `100` | Will use default units if possible. Doesn't work with properties that aren't specified in the CSS, or non-numerical values (e.g. margin: auto; left: auto; etc..).
-
-Notes : For properties that aren't
 
 Example:
 
@@ -225,7 +229,7 @@ Examples:
 ```javascript
 anime({
   targets: 'div',
-  translateX(el, index) {
+  translateX: function(el, index) {
     return anime.random(50, 100); // Will set a random value from 50 to 100 to each divs
   }
 });
@@ -236,7 +240,7 @@ anime({
 ```javascript
 anime({
   targets: 'path',
-  strokeDashoffset(el) {
+  strokeDashoffset: function(el) {
     var pathLength = el.getTotalLength();
     return [pathLength, 0]; // Will use the exact path length for each targeted path elements
   }
@@ -249,44 +253,44 @@ anime({
 
 ![Playback controls](http://anime-js.com/img/gifs/playback-controls.gif)
 
-Play, pause, restart, seek, rumtime callback and Promise in the animation.
+Play, pause, restart and seek the animation.
 
-| Names | Info | Return | Parameters
-| --- | --- | --- | --- | ---
-| `.play()` | Play the animation | animation object | animation parameters object
-| `.pause()` | Pause the animation | animation object | none
-| `.restart()` | Restart the animation | animation object | animation parameters object
-| `.seek()` | Advance in the animation | animation object | a percentage, or an object {time: 1250}
+| Names | Infos | Arguments
+| --- | --- | ---
+| `.play()` | Play the animation | animation parameters object
+| `.pause()` | Pause the animation | none
+| `.restart()` | Restart the animation | animation parameters object
+| `.seek()` | Advance in the animation | a percentage, or an object {time: 1250}
 | `.begin` | Callback at animation began, replace begin in the anime's options | Promise | function(anim)
 | `.complete` | Callback at animation ended, replace complete in the anime's options | Promise | function(anim)
 
 ```javascript
-    var myAnimation = anime({
-      targets: 'div',
-      translateX: 100,
-      loop: false,
-      autoplay: false
-    });
+  var myAnimation = anime({
+    targets: 'div',
+    translateX: 100,
+    autoplay: false
+  });
 
-    myAnimation.once('begin',anim => {
-      console.log("Began!"); // Called the animation began.
-    });
+  myAnimation.once('begin',anim => {
+    console.log("Began!"); // Called the animation began.
+  });
 
-    myAnimation.once('complete',anim => {
-        console.log("Completed!"); // Called the animation ended.
-    });
+  myAnimation.once('complete',anim => {
+      console.log("Completed!"); // Called the animation ended.
+  });
 
-    let listener = myAnimation.on('update', anim => {
-      console.log("Updated!"); // Called the animation updated.
-    });
-    listener.off();
+  let listener = myAnimation.on('update', anim => {
+    console.log("Updated!"); // Called the animation updated.
+  });
+  listener.off();
 
-    // all of the above events may be accessed via the .on or .once methods
-    myAnimation.once('pause',(anim,listener) => {
-      console.log("the animation was paused!"); // called on pause
-      setTimeout(anim.play, 1500);
-    });
+  // all of the above events may be accessed via the .on or .once methods
+  myAnimation.once('pause',(anim,listener) => {
+    console.log("the animation was paused!"); // called on pause
+    setTimeout(anim.play, 1500);
+  });
 
+  myAnimation.play(); // Manually play the animation
 
 ```
 
