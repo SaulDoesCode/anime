@@ -78,11 +78,14 @@
                 return func.ehandle;
             },
             once(type, func) {
-                function funcwrapper() {
-                    func.apply(obj, arguments);
-                    options.off(funcwrapper);
-                }
-                options.on(type, funcwrapper);
+                if (is.func(func)) {
+                    function funcwrapper() {
+                        func.apply(obj || this, arguments);
+                        options.off(funcwrapper);
+                    }
+                    options.on(type, funcwrapper);
+                } else throw TypeError('eventemitter: .once needs a function');
+
                 return options;
             },
             off(func) {
@@ -93,7 +96,7 @@
                 if (!options.stop) {
                     let args = Array.prototype.slice.call(arguments, 1);
                     options.evtlisteners.forEach(ln => {
-                        if (ln.etype == type && !options.__stop) ln.apply(obj, args.concat(ln.ehandle));
+                        if (ln.etype == type && !options.__stop) ln.apply(this, args.concat(ln.ehandle));
                     });
                 }
                 return options;
@@ -524,7 +527,7 @@
                 anim = createAnimation(params);
 
             ['complete', 'begin', 'update'].forEach(type => {
-                if (is.func(anim.settings[type])) anim.once(type, anim.settings.complete);
+                if (is.func(anim.settings[type])) anim.once(type, anim.settings[type]);
             });
 
             anim.tick = now => {

@@ -286,6 +286,8 @@ Play, pause, restart and seek the animation.
     console.log("Updated!"); // Called the animation updated.
   });
   listener.off();
+  // later
+  listener.on();
 
   // all of the above events may be accessed via the .on or .once methods
   myAnimation.once('pause',(anim,listener) => {
