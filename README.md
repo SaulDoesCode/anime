@@ -261,6 +261,9 @@ Play, pause, restart and seek the animation.
 | `.pause()` | Pause the animation | none
 | `.restart()` | Restart the animation | animation parameters object
 | `.seek()` | Advance in the animation | a percentage, or an object {time: 1250}
+| `.on()` | handle events on an animation | listener object -> { off, on }
+| `.once()` | handle an event on an animation once | listener object -> { off, on }
+| `.off()` | handle events on an animation | eventemitter options object
 | `.begin` | Callback at animation began, replace begin in the anime's options | Promise | function(anim)
 | `.complete` | Callback at animation ended, replace complete in the anime's options | Promise | function(anim)
 
