@@ -28,10 +28,7 @@
             direction: 'normal',
             easing: 'easeOutElastic',
             elasticity: 400,
-            round: false,
-            begin: undef,
-            update: undef,
-            complete: undef
+            round: false
         };
 
     // Utils
@@ -47,6 +44,7 @@
         object: a => includes(Object.prototype.toString.call(a), 'Object'),
         html: a => (a instanceof NodeList || a instanceof HTMLCollection),
         node: a => a.nodeType,
+        bool: a => typeof a === 'boolean',
         svg: a => a instanceof SVGElement,
         number: a => !isNaN(parseInt(a)),
         string: a => typeof a === 'string',
@@ -59,6 +57,62 @@
         hsl: a => /^hsl/.test(a),
         color: a => (is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a))
     }))();
+
+    function eventemitter(obj) {
+        let options = {
+            evtlisteners: new Set,
+            stop: false,
+            on(type, func) {
+                if (!is.func(func)) throw new TypeError(`.on(${type},func) : func is not a function`);
+                func.etype = type;
+                options.evtlisteners.add(func);
+                return {
+                    on() {
+                        func.etype = type;
+                        options.evtlisteners.add(func);
+                        return options;
+                    },
+                    off: () => options.off(func),
+                }
+            },
+            once(type, func) {
+                function funcwrapper() {
+                    func.apply(obj, arguments);
+                    options.off(funcwrapper);
+                }
+                options.on(type, funcwrapper);
+            },
+            off(func) {
+                if (options.evtlisteners.has(func)) options.evtlisteners.delete(func);
+                return options;
+            },
+            emit(type) {
+                if (!options.stop) {
+                    let args = Array.from(arguments).slice(1);
+                    options.evtlisteners.forEach(ln => {
+                        if (ln.etype == type && !options.stop) ln.apply(obj, args);
+                    });
+                }
+                return options;
+            },
+            stopall(stop) {
+                options.stop = is.bool(stop) ? stop : true;
+            },
+            defineHandle(name, type) {
+                if (!type) type = name;
+                this[name] = (fn, once) => options[once == true ? 'once' : 'on'](type, fn);
+                return options;
+            },
+        };
+        Object.keys(options).forEach(key => {
+            Object.defineProperty(obj, key, {
+                value: options[key],
+                enumerable: false,
+                writable: false,
+            })
+        });
+        return obj;
+    }
 
     // Easings functions adapted from http://jqueryui.com/
 
@@ -426,7 +480,7 @@
             });
             if (transforms)
                 for (let t in transforms) anim.animatables[t].target.style.transform = transforms[t].join(' ');
-            if (anim.settings.update) anim.settings.update(anim);
+            anim.emit('update', anim);
             return anim;
         },
 
@@ -445,7 +499,7 @@
             anim.properties = getProperties(params, anim.settings);
             anim.tweens = getTweens(anim.animatables, anim.properties);
             anim.duration = anim.tweens.length ? Math.max.apply(Math, anim.tweens.map(tween => tween.totalDuration)) : params.duration / animation.speed;
-            return anim;
+            return eventemitter(anim);
         };
 
     // Public
@@ -479,8 +533,7 @@
                     time.current = time.last + now - time.start;
                     let s = anim.settings;
                     if (!anim.began && s.begin && time.current >= s.delay) {
-                        if (is.func(s.begin)) s.begin(anim);
-                        if (is.func(anim.began_resolve)) anim.began_resolve(anim);
+                        anim.emit('begin', anim);
                         anim.started = true;
                     }
                     setAnimationProgress(anim, time.current);
@@ -493,8 +546,7 @@
                             anim.ended = true;
                             anim.pause();
                             anim.started = false;
-                            if (is.func(s.complete)) s.complete(anim);
-                            if (is.func(anim.completed_resolve)) anim.completed_resolve(anim);
+                            anim.emit('complete');
                         }
                     }
                     time.last = 0;
@@ -505,6 +557,7 @@
 
             anim.pause = () => {
                 anim.running = false;
+                anim.emit('paused', anim);
                 removeWillChange(anim);
                 let i = animations.indexOf(anim);
                 if (i > -1) animations.splice(i, 1);
@@ -529,30 +582,27 @@
 
             anim.restart = () => {
                 if (anim.reversed) reverseTweens(anim);
+                anim.emit('restart', anim);
                 anim.pause();
                 anim.seek(0);
                 return anim.play();
             };
 
-            const callbacks = type => callback => {
-                anim.settings[type] = is.func(callback) ? callback : undefined;
-                return anim;
+            function commonEvents(type) {
+                anim[type] = fn => {
+                    if (is.func(fn)) {
+                        const listener = anim.on(type, fn.bind(anim));
+                        return {
+                            anim,
+                            listener
+                        }
+                    }
+                }
             }
 
-            anim.begin = callbacks('begin');
-            anim.update = callbacks('update');
-            anim.complete = callbacks('complete');
-
-            const promise = type => {
-                if (typeof Promise !== "undefined") return () => new Promise(resolve => {
-                  anim[type + '_resolve'] = resolve;
-                });
-                console.warn('Your browser doesn\'t support promises.');
-            }
-
-            anim.began = promise('began');
-            anim.updated = promise('updated');
-            anim.completed = promise('completed');
+            commonEvents('begin');
+            commonEvents('update');
+            commonEvents('complete');
 
             if (anim.settings.autoplay) anim.play();
 
@@ -577,7 +627,6 @@
                 }
             }
         };
-
 
     animation.speed = 1;
     animation.list = animations;
