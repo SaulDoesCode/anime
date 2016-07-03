@@ -640,7 +640,11 @@
       return anim;
     }; // Strings
   // Public
-  // Remove on one or multiple targets from all active animations.
+  animation.all = function(event) {
+    return Promise.all(flattenArr(arguments).slice(1).map(function(anim) {
+      return anim.once(event);
+    }));
+  }; // Remove on one or multiple targets from all active animations.
   animation.remove = function(targets) {
     targets = filterTargets(targets);
     for (var i = animations.length - 1; i >= 0; i--) {
