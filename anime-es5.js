@@ -15,6 +15,12 @@
 })(this, function() { // Defaults
   var undef = undefined,
     validTransforms = ['translateX', 'translateY', 'translateZ', 'rotate', 'rotateX', 'rotateY', 'rotateZ', 'scale', 'scaleX', 'scaleY', 'scaleZ', 'skewX', 'skewY'],
+    perf = window.performance || {
+      offset: Date.now(),
+      now: function() {
+        return Date.now() - this.offset;
+      }
+    },
     defaultSettings = {
       duration: 1000,
       delay: 0,
@@ -25,16 +31,8 @@
       reversed: false,
       elasticity: 400,
       round: false
-    }; // Utils
-  function includes(arr, searchElement) {
-    if (arr.includes) return arr.includes(searchElement);
-    if (!is.array(arr)) arr = Array.prototype.slice.call(arr);
-    return arr.length === 0 ? false : arr.some(function(item) {
-      return item === searchitem;
-    });
-  }
-  var is = function() {
-    return {
+    },
+    is = {
       array: Array.isArray,
       object: function(a) {
         return includes(Object.prototype.toString.call(a), 'Object');
@@ -50,6 +48,9 @@
       },
       svg: function(a) {
         return a instanceof SVGElement;
+      },
+      dom: function(a) {
+        return is.node(a) || is.svg(a);
       },
       number: function(a) {
         return !isNaN(parseInt(a));
@@ -81,75 +82,13 @@
       color: function(a) {
         return is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a);
       }
-    };
-  }();
-
-  function eventemitter(obj) {
-    if (!obj) obj = {};
-    var options = {
-      evtlisteners: new Set(),
-      __stop: false,
-      on: function(type, func) {
-        if (!is.func(func)) throw new TypeError('.on(' + type + ',func) : func is not a function');
-        func.etype = type;
-        func.ehandle = {
-          on: function() {
-            func.etype = type;
-            options.evtlisteners.add(func);
-            return func.ehandle;
-          },
-          off: function() {
-            options.off(func);
-            return func.ehandle;
-          }
-        };
-        options.evtlisteners.add(func);
-        return func.ehandle;
-      },
-      once: function(type, func) {
-        if (is.func(func)) {
-          var _ret = function() {
-            var funcwrapper = function() {
-              func.apply(obj || this, arguments);
-              options.off(funcwrapper);
-            };
-            return {
-              v: options.on(type, funcwrapper)
-            };
-          }();
-          if (typeof _ret === "object") return _ret.v;
-        }
-        throw new TypeError('eventemitter: .once needs a function');
-      },
-      off: function(func) {
-        if (options.evtlisteners.has(func)) options.evtlisteners.delete(func);
-        return options;
-      },
-      emit: function(type) {
-        var _arguments = arguments,
-          _this = this;
-        if (!options.stop) {
-          (function() {
-            var args = Array.prototype.slice.call(_arguments, 1);
-            options.evtlisteners.forEach(function(ln) {
-              if (ln.etype == type && !options.__stop) ln.apply(_this, args.concat(ln.ehandle));
-            });
-          })();
-        }
-        return options;
-      },
-      stopall: function(stop) {
-        options.__stop = is.bool(stop) ? stop : true;
-      }
-    };
-    Object.keys(options).forEach(function(key) {
-      Object.defineProperty(obj, key, {
-        value: options[key],
-        enumerable: false,
-        writable: false
-      });
+    }; // Utils
+  function includes(arr, searchElement) {
+    if (arr.includes) return arr.includes(searchElement);
+    if (!is.array(arr)) arr = [].slice.call(arr);
+    return !arr.length ? false : arr.some(function(a) {
+      return a === searchElement;
     });
-    return obj;
   } // Easings functions adapted from http://jqueryui.com/
   var easings = function() {
       var eases = {},
@@ -183,7 +122,7 @@
           return Math.pow(t, i + 2);
         };
       });
-      Object.keys(functions).forEach(function(name) {
+      var _loop = function(name) {
         var easeIn = functions[name];
         eases['easeIn' + name] = easeIn;
         eases['easeOut' + name] = function(t, m) {
@@ -192,7 +131,10 @@
         eases['easeInOut' + name] = function(t, m) {
           return t < 0.5 ? easeIn(t * 2, m) / 2 : 1 - easeIn(t * -2 + 2, m) / 2;
         };
-      });
+      };
+      for (var name in functions) {
+        _loop(name);
+      }
       eases.linear = function(t) {
         return t;
       };
@@ -239,7 +181,7 @@
         return groups[group];
       });
     },
-    removeArrDupes = function(arr) {
+    dropArrDupes = function(arr) {
       return arr.filter(function(item, pos, context) {
         return context.indexOf(item) === pos;
       });
@@ -256,6 +198,70 @@
         o1[p] = !is.undef(o1[p]) ? o1[p] : o2[p];
       }
       return o1;
+    },
+    eventsys = function(obj) {
+      if (!is.object(obj)) obj = {};
+      var listeners = new Set();
+
+      function on(type, func) {
+        func.type = type;
+        func.handle = {
+          on: function() {
+            listeners.add(func);
+            return func.handle;
+          },
+          once: function() {
+            return once(type, func);
+          },
+          off: function() {
+            off(func);
+            return func.handle;
+          }
+        };
+        listeners.add(func);
+        return func.handle;
+      }
+
+      function off(func) {
+        if (listeners.has(func)) listeners.delete(func);
+        return func.handle;
+      }
+
+      function once(type, func) {
+        if (is.func(func)) {
+          var _ret2 = function() {
+            var funcwrapper = function() {
+              func.apply(obj, arguments);
+              off(funcwrapper);
+            };
+            off(func);
+            return {
+              v: on(type, funcwrapper)
+            };
+          }();
+          if (typeof _ret2 === "object") return _ret2.v;
+        }
+      }
+      obj.listeners = listeners;
+      obj.on = on;
+      obj._once = once;
+      obj.once = function(event) {
+        return new Promise(function(pass) {
+          return obj._once(event, pass);
+        });
+      };
+      return obj;
+    },
+    emit = function(type, anim) {
+      var _arguments = arguments;
+      if (anim.listeners.size > 0) {
+        (function() {
+          var args = [].slice.call(_arguments, 1);
+          anim.listeners.forEach(function(ln) {
+            if (ln.type == type) ln.apply(anim, args.concat(ln.handle));
+          });
+        })();
+      }
     }, // Colors
     hexToRgb = function(hex) {
       hex = hex.replace(/^#?([a-f\d])([a-f\d])([a-f\d])$/i, function(m, r, g, b) {
@@ -300,14 +306,15 @@
       return getUnit(val) ? val : includes(prop, 'translate') ? getUnit(intialVal) ? val + getUnit(intialVal) : val + 'px' : includes(prop, 'rotate') || includes(prop, 'skew') ? val + 'deg' : val;
     }, // Values
     getAnimationType = function(el, prop) {
-      if ((is.node(el) || is.svg(el)) && includes(validTransforms, prop)) return 'transform';
-      if ((is.node(el) || is.svg(el)) && prop !== 'transform' && getCSSValue(el, prop)) return 'css';
-      if ((is.node(el) || is.svg(el)) && (el.getAttribute(prop) || is.svg(el) && el[prop])) return 'attribute';
+      if (is.dom(el) && includes(validTransforms, prop)) return 'transform';
+      if (is.dom(el) && prop !== 'transform' && getCSSValue(el, prop)) return 'css';
+      if (is.dom(el) && (el.getAttribute(prop) || is.svg(el) && el[prop])) return 'attribute';
       if (!is.null(el[prop]) && !is.undef(el[prop])) return 'object';
     },
     getCSSValue = function(el, prop) { // Then return the property value or fallback to '0' when getPropertyValue fails
       if (prop in el.style) return getComputedStyle(el).getPropertyValue(stringToHyphens(prop)) || '0';
-    },
+    }, // prefix transforms for safari
+    //transform = (getCSSValue(document.body, 'transform') ? '' : '-webkit-') + 'transform',
     getTransformValue = function(el, prop) {
       var defaultVal = includes(prop, 'scale') ? 1 : 0,
         str = el.style.transform;
@@ -349,8 +356,11 @@
         return a + numbers[i - 1] + (b ? b : initialStrings[i - 1]);
       });
     }, // Animatables
+    filterTargets = function(targets) {
+      return targets ? flattenArr(is.array(targets) ? targets.map(toArray) : toArray(targets)) : [];
+    },
     getAnimatables = function(targets) {
-      return (targets ? flattenArr(is.array(targets) ? targets.map(toArray) : toArray(targets)) : []).map(function(t, i) {
+      return filterTargets(targets).map(function(t, i) {
         return {
           target: t,
           id: i
@@ -449,8 +459,8 @@
         }
       });
       return {
-        properties: removeArrDupes(props).join(', '),
-        elements: removeArrDupes(els)
+        properties: dropArrDupes(props).join(', '),
+        elements: dropArrDupes(els)
       };
     },
     setWillChange = function(anim) {
@@ -495,7 +505,7 @@
       return recomposeValue(progress, tween.to.strings, tween.from.strings);
     },
     setAnimationProgress = function(anim, time) {
-      var transforms = void 0;
+      var transforms = {};
       anim.time = Math.min(time, anim.duration);
       anim.progress = anim.time / anim.duration * 100;
       anim.tweens.forEach(function(tween) {
@@ -521,11 +531,11 @@
           }
         });
       });
-      if (transforms)
+      if (transforms) // for (let t in transforms) anim.animatables[t].target.style[transform] = transforms[t].join(' ');
         for (var t in transforms) {
-          anim.animatables[t].target.style.transform = transforms[t].join(' ');
-        }
-      anim.emit('update', anim);
+        anim.animatables[t].target.style.transform = transforms[t].join(' ');
+      }
+      emit('update', anim);
       return anim;
     }, // Animation
     createAnimation = function(params) {
@@ -543,7 +553,7 @@
       anim.duration = anim.tweens.length ? Math.max.apply(Math, anim.tweens.map(function(tween) {
         return tween.totalDuration;
       })) : params.duration / animation.speed;
-      return eventemitter(anim);
+      return eventsys(anim);
     },
     animations = [],
     engine = {
@@ -566,7 +576,7 @@
       var time = {},
         anim = createAnimation(params);
       ['complete', 'begin', 'update'].forEach(function(type) {
-        if (is.func(anim.settings[type])) anim[type == 'update' ? 'on' : 'once'](type, anim.settings[type]);
+        if (is.func(anim.settings[type])) anim[type == 'update' ? 'on' : '_once'](type, anim.settings[type]);
       });
       anim.tick = function(now) {
         if (anim.running) {
@@ -574,7 +584,7 @@
           time.current = time.last + now - time.start;
           var s = anim.settings;
           if (time.current >= s.delay) {
-            if (!anim.started) anim.emit('begin', anim);
+            if (!anim.started) emit('begin', anim);
             anim.started = true;
           }
           setAnimationProgress(anim, time.current);
@@ -587,7 +597,7 @@
               anim.ended = true;
               anim.pause();
               anim.started = false;
-              anim.emit('complete', anim);
+              emit('complete', anim);
             }
           }
           time.last = 0;
@@ -598,7 +608,7 @@
       };
       anim.pause = function() {
         anim.running = false;
-        anim.emit('pause', anim);
+        emit('pause', anim);
         removeWillChange(anim);
         var i = animations.indexOf(anim);
         if (i > -1) animations.splice(i, 1);
@@ -621,63 +631,35 @@
       };
       anim.restart = function() {
         if (anim.reversed) reverseTweens(anim);
-        anim.emit('restart', anim);
+        emit('restart', anim);
         anim.pause();
         anim.seek(0);
         return anim.play();
       };
-      /*if (typeof Promise != "undefined") {
-                      function promise(type) {
-                          Object.defineProperty(anim, type, {
-                              get() {
-                                  return new Promise(pass => {
-                                      anim.once(type, pass);
-                                  });
-                              },
-                          });
-                      }
-
-                      promise('complete');
-                      promise('begin');
-
-                  } else console.warn("anime : Your browser doesn't support promises.");*/
       if (anim.settings.autoplay) anim.play();
       return anim;
-    }, // Remove on one or multiple targets from all active animations.
-    remove = function(elements) {
-      var targets = flattenArr(is.array(elements) ? elements.map(toArray) : toArray(elements));
-      for (var _animation, i = animations.length - 1; i >= 0; i--) {
-        _animation = animations[i];
-        for (var tween, t = _animation.tweens.length - 1; t >= 0; t--) {
-          tween = _animation.tweens[t];
-          for (var a = tween.animatables.length - 1; a >= 0; a--) {
-            if (includes(targets, tween.animatables[a].target)) {
-              tween.animatables.splice(a, 1);
-              if (!tween.animatables.length) _animation.tweens.splice(t, 1);
-              if (!_animation.tweens.length) _animation.pause();
-            }
+    }; // Strings
+  // Public
+  // Remove on one or multiple targets from all active animations.
+  animation.remove = function(targets) {
+    targets = filterTargets(targets);
+    for (var i = animations.length - 1; i >= 0; i--) {
+      var _animation = animations[i],
+        tweens = _animation.tweens;
+      for (var t = _animation.tweens.length - 1; t >= 0; t--) {
+        var tween = _animation.tweens[t];
+        for (var a = tween.animatables.length - 1; a >= 0; a--) {
+          if (includes(targets, tween.animatables[a].target)) {
+            tween.animatables.splice(a, 1);
+            if (!tween.animatables.length) _animation.tweens.splice(t, 1);
+            if (!_animation.tweens.length) _animation.pause();
           }
         }
       }
-    }; // Strings
-  // Public
-  /*if (typeof Promise !== "undefined") {
-          animation.alldone = function () {
-              const anims = flattenArr(arguments);
-              return new Promise(pass => {
-                  let i = 1;
-                  anims.forEach(anim => {
-                      anim.once('complete', () => {
-                          if (i++ === anims.length) pass(anims);
-                      });
-                  });
-              });
-          }
-
-      }*/
+    }
+  };
   animation.speed = 1;
   animation.list = animations;
-  animation.remove = remove;
   animation.easings = easings;
   animation.getValue = getInitialTargetValue;
   animation.path = getPathProps;
@@ -686,8 +668,8 @@
   animation.dupeObj = dupeObj;
   animation.mergeObjs = mergeObjs;
   animation.flattenArr = flattenArr;
-  animation.removeArrDupes = removeArrDupes;
-  animation.eventemitter = eventemitter;
+  animation.dropArrDupes = dropArrDupes;
+  animation.eventsys = eventsys;
   animation.play = engine.play;
   animation.pause = engine.pause;
   return animation;
