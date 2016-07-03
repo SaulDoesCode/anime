@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>anime.js</title>
+<meta charset="utf-8">
+<link rel="icon" type="image/png" href="img/favicon.png" />
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+<link href="css/styles.css" rel="stylesheet">
+<style>
+  div {
+    width: 100px;
+    height: 100px;
+  }
+</style>
+</head>
+<body>
+<section>
+  <article>
+    <div class="blue"></div>
+    <div class="red"></div>
+    <div class="green"></div>
+  </article>
+  <br>
+  <header>Anime Promise example</header>
+  <button onclick="myAnimation.play()">start</button>
+</section>
+<div class="list"></div>
+<script src="../anime.js"></script>
+<script>
+
+  var myAnimation = anime({
+    targets: 'article > div',
+    delay(el,index) {
+      return index * 50;
+    },
+    autoplay:false,
+    translateX: [0, 140]
+  });
+
+  var loglist = document.querySelector('div.list');
+
+  /*
+       myAnimation.on('complete', function(anim) {
+         console.log('animation completed');
+         anim.play(); // will re-play the animation indefinitely
+       });
+   */
+
+  let happened = false;
+  myAnimation.on('begin',function(anim) {
+    console.log('animation began');
+    loglist.innerHTML += happened ? '<br><span>animation began but the complete event listener won\'t be called because promise based events can only recieve an event once</span>' :
+    '<br><span>animation begin</span>';
+    happened = false;
+  });
+
+  myAnimation.once('complete').then(function(anim) {
+    console.log('animation completed');
+    loglist.innerHTML += '<br><span>animation end</span>';
+    happened = true;
+    anim.play(); // will re-play the animation only once
+  });
+
+</script>
+</body>
+</html>

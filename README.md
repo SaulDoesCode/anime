@@ -263,6 +263,8 @@ Play, pause, restart and seek the animation.
 | `.seek()` | Advance in the animation | a percentage, or an object {time: 1250}
 | `.on()` | handle events on an animation | listener object -> { off, on }
 | `.once()` | handle an event on an animation once | Promise
+| `.complete` | handle an event on an animation once | Promise
+| `.begin` | handle an event on an animation once | Promise
 
 ```javascript
   var myAnimation = anime({
@@ -275,6 +277,14 @@ Play, pause, restart and seek the animation.
   myAnimation.once('begin').then(anim => {
     console.log("Began!"); // Called the animation began.
   });
+  // but you can also use
+  myAnimation.begin.then(anim => {
+    console.log("Began!"); // Called the animation began.
+  });
+  // or
+  myAnimation.begin = anim => {
+    console.log("Began!"); // Called the animation began.
+  };
 
   // .on requires a callback and returns a listener
   myAnimation.on('complete', anim => {
@@ -329,6 +339,7 @@ let anims = Array.from(document.querySelectorAll('div'))
   anime.all('begin', ...anims).then(anims => {
     console.log('all the animations started! :D',anims);
   });
+
 
 ```
 

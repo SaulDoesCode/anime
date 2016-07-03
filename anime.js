@@ -547,7 +547,7 @@
                 return new Promise(pass => anim._once(type,pass))
               },
               set(fn) {
-                if(is.func(fn)) anime.once(type,fn);
+                if(is.func(fn)) anim._once(type,fn);
               }
             });
         });
