@@ -1,9 +1,9 @@
 {
-  "name": "animejs",
+  "name": "anime-next",
   "description": "Polyvalent JavaScript animation engine",
   "main": "anime-es5.min.js",
   "authors": [
-    "Julian Garnier <hello@julian.gr>"
+    "Julian Garnier, Saul van der Walt"
   ],
   "license": "MIT",
   "keywords": [
