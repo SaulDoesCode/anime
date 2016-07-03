@@ -607,6 +607,12 @@
         return anim;
     };
 
+
+    animation.all = function(event) {
+        return Promise.all(flattenArr(arguments).slice(1).map(anim => anim.once(event)));
+    }
+
+
     // Remove on one or multiple targets from all active animations.
 
     animation.remove = targets => {

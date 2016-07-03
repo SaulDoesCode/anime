@@ -229,7 +229,7 @@ Examples:
 ```javascript
 anime({
   targets: 'div',
-  translateX: function(el, index) {
+  translateX(el, index) {
     return anime.random(50, 100); // Will set a random value from 50 to 100 to each divs
   }
 });
@@ -240,8 +240,8 @@ anime({
 ```javascript
 anime({
   targets: 'path',
-  strokeDashoffset: function(el) {
-    var pathLength = el.getTotalLength();
+  strokeDashoffset(el) {
+    let pathLength = el.getTotalLength();
     return [pathLength, 0]; // Will use the exact path length for each targeted path elements
   }
 });
@@ -262,10 +262,7 @@ Play, pause, restart and seek the animation.
 | `.restart()` | Restart the animation | animation parameters object
 | `.seek()` | Advance in the animation | a percentage, or an object {time: 1250}
 | `.on()` | handle events on an animation | listener object -> { off, on }
-| `.once()` | handle an event on an animation once | listener object -> { off, on }
-| `.off()` | handle events on an animation | eventemitter options object
-| `.begin` | Callback at animation began, replace begin in the anime's options | Promise | function(anim)
-| `.complete` | Callback at animation ended, replace complete in the anime's options | Promise | function(anim)
+| `.once()` | handle an event on an animation once | Promise
 
 ```javascript
   var myAnimation = anime({
@@ -274,14 +271,17 @@ Play, pause, restart and seek the animation.
     autoplay: false
   });
 
-  myAnimation.once('begin',anim => {
+  // .once always returns a promise
+  myAnimation.once('begin').then(anim => {
     console.log("Began!"); // Called the animation began.
   });
 
-  myAnimation.once('complete',anim => {
+  // .on requires a callback and returns a listener
+  myAnimation.on('complete', anim => {
       console.log("Completed!"); // Called the animation ended.
   });
 
+  // listeners may be used to turn an event off or on again
   let listener = myAnimation.on('update', anim => {
     console.log("Updated!"); // Called the animation updated.
   });
@@ -289,8 +289,7 @@ Play, pause, restart and seek the animation.
   // later
   listener.on();
 
-  // all of the above events may be accessed via the .on or .once methods
-  myAnimation.once('pause',(anim,listener) => {
+  myAnimation.once('pause').then(anim => {
     console.log("the animation was paused!"); // called on pause
     setTimeout(anim.play, 1500);
   });
@@ -299,7 +298,7 @@ Play, pause, restart and seek the animation.
 
 ```
 
-Promise support
+Further examples of Promise Use with events
 ```js
 
 
@@ -308,32 +307,29 @@ let anims = Array.from(document.querySelectorAll('div'))
             .map(el => anime({
                 targets: el,
                 translateY : -30,
-                duration:anime.random(100,2000)
+                duration: anime.random(100,2000)
             }));
 
-  anime.alldone(anims).then(anims => {
+
+  // anime.all simplifies reacting to events
+  // on multiple animations
+  // anime.all( eventtype , [animation,animation,animation] or ...animations )
+  anime.all('complete',anims).then(anims => {
     console.log('all done! :D',anims);
   });
 
-  anims[0].begin.then(anim => {
-    console.log('animation started!');
-  });
-  anims[1].begin.then(anim => {
-    console.log('animation started!');
-  });
-  anims[2].begin.then(anim => {
-    console.log('animation started!');
+  // the same as above without anime.all
+
+  let animsPromises = anims.map(anim => anim.once('complete')); // convert to promises
+  Promise.all(animsPromises).then(anims => {
+    console.log('all done! :D',anims);
   });
 
-  anims[0].complete.then(anim => {
-    console.log('1 done!!');
+  // different way of using anime.all
+  anime.all('begin', ...anims).then(anims => {
+    console.log('all the animations started! :D',anims);
   });
-  anims[1].complete.then(anim => {
-    console.log('2 done!!');
-  });
-  anims[2].complete.then(anim => {
-    console.log('3 done!!');
-  });
+
 ```
 
 [Live example on CodePen](http://codepen.io/juliangarnier/pen/d1cf92b2af5bb4166cde511e233e8a0d?editors=0010)
