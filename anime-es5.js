@@ -108,15 +108,18 @@
       },
       once: function(type, func) {
         if (is.func(func)) {
-          (function() {
+          var _ret = function() {
             var funcwrapper = function() {
               func.apply(obj || this, arguments);
               options.off(funcwrapper);
             };
-            options.on(type, funcwrapper);
-          })();
-        } else throw TypeError('eventemitter: .once needs a function');
-        return options;
+            return {
+              v: options.on(type, funcwrapper)
+            };
+          }();
+          if (typeof _ret === "object") return _ret.v;
+        }
+        throw new TypeError('eventemitter: .once needs a function');
       },
       off: function(func) {
         if (options.evtlisteners.has(func)) options.evtlisteners.delete(func);
@@ -595,7 +598,7 @@
       };
       anim.pause = function() {
         anim.running = false;
-        anim.emit('paused', anim);
+        anim.emit('pause', anim);
         removeWillChange(anim);
         var i = animations.indexOf(anim);
         if (i > -1) animations.splice(i, 1);
@@ -606,7 +609,7 @@
         if (params) anim = mergeObjs(createAnimation(mergeObjs(params, anim.settings)), anim);
         anim.pause();
         anim.running = true;
-        time.start = typeof performance != "undefined" ? performance.now() : +Date.now();
+        time.start = performance.now();
         time.last = anim.ended ? 0 : anim.time;
         var s = anim.settings;
         if (s.direction === 'reverse') reverseTweens(anim);
@@ -623,19 +626,21 @@
         anim.seek(0);
         return anim.play();
       };
-      if (typeof Promise != "undefined") {
-        var promise = function(type) {
-          Object.defineProperty(anim, type, {
-            get: function() {
-              return new Promise(function(pass) {
-                anim.once(type, pass);
-              });
-            }
-          });
-        };
-        promise('complete');
-        promise('begin');
-      } else console.warn("anime : Your browser doesn't support promises.");
+      /*if (typeof Promise != "undefined") {
+                      function promise(type) {
+                          Object.defineProperty(anim, type, {
+                              get() {
+                                  return new Promise(pass => {
+                                      anim.once(type, pass);
+                                  });
+                              },
+                          });
+                      }
+
+                      promise('complete');
+                      promise('begin');
+
+                  } else console.warn("anime : Your browser doesn't support promises.");*/
       if (anim.settings.autoplay) anim.play();
       return anim;
     }, // Remove on one or multiple targets from all active animations.
@@ -656,19 +661,20 @@
       }
     }; // Strings
   // Public
-  if (typeof Promise !== "undefined") {
-    animation.alldone = function() {
-      var anims = flattenArr(arguments);
-      return new Promise(function(pass) {
-        var i = 1;
-        anims.forEach(function(anim) {
-          anim.once('complete', function() {
-            if (i++ === anims.length) pass(anims);
-          });
-        });
-      });
-    };
-  }
+  /*if (typeof Promise !== "undefined") {
+          animation.alldone = function () {
+              const anims = flattenArr(arguments);
+              return new Promise(pass => {
+                  let i = 1;
+                  anims.forEach(anim => {
+                      anim.once('complete', () => {
+                          if (i++ === anims.length) pass(anims);
+                      });
+                  });
+              });
+          }
+
+      }*/
   animation.speed = 1;
   animation.list = animations;
   animation.remove = remove;

@@ -20,6 +20,12 @@
     // Defaults
     const undef = undefined,
         validTransforms = ['translateX', 'translateY', 'translateZ', 'rotate', 'rotateX', 'rotateY', 'rotateZ', 'scale', 'scaleX', 'scaleY', 'scaleZ', 'skewX', 'skewY'],
+        perf = (window.performance || {
+            offset: Date.now(),
+            now() {
+                return Date.now() - this.offset
+            }
+        }),
         defaultSettings = {
             duration: 1000,
             delay: 0,
@@ -34,19 +40,14 @@
 
     // Utils
 
-    function includes(arr, searchElement) {
-        if (arr.includes) return arr.includes(searchElement);
-        if (!is.array(arr)) arr = Array.prototype.slice.call(arr);
-        return arr.length === 0 ? false : arr.some(item => item === searchitem);
-    }
-
-    const is = (() => ({
+    const is = {
         array: Array.isArray,
         object: a => includes(Object.prototype.toString.call(a), 'Object'),
         html: a => (a instanceof NodeList || a instanceof HTMLCollection),
         node: a => a.nodeType,
         bool: a => typeof a === 'boolean',
         svg: a => a instanceof SVGElement,
+        dom: a => is.node(a) || is.svg(a),
         number: a => !isNaN(parseInt(a)),
         string: a => typeof a === 'string',
         func: a => typeof a === 'function',
@@ -57,70 +58,16 @@
         rgba: a => /^rgba/.test(a),
         hsl: a => /^hsl/.test(a),
         color: a => (is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a))
-    }))();
+    }
 
-    function eventemitter(obj) {
-        if(!obj) obj = {};
-        let options = {
-            evtlisteners: new Set,
-            __stop: false,
-            on(type, func) {
-                if (!is.func(func)) throw new TypeError(`.on(${type},func) : func is not a function`);
-                func.etype = type;
-                func.ehandle = {
-                    on() {
-                        func.etype = type;
-                        options.evtlisteners.add(func);
-                        return func.ehandle;
-                    },
-                    off: () => {
-                      options.off(func);
-                      return func.ehandle;
-                    },
-                };
-                options.evtlisteners.add(func);
-                return func.ehandle;
-            },
-            once(type, func) {
-                if (is.func(func)) {
-                    function funcwrapper() {
-                        func.apply(obj || this, arguments);
-                        options.off(funcwrapper);
-                    }
-                    options.on(type, funcwrapper);
-                } else throw TypeError('eventemitter: .once needs a function');
 
-                return options;
-            },
-            off(func) {
-                if (options.evtlisteners.has(func)) options.evtlisteners.delete(func);
-                return options;
-            },
-            emit(type) {
-                if (!options.stop) {
-                    let args = Array.prototype.slice.call(arguments, 1);
-                    options.evtlisteners.forEach(ln => {
-                        if (ln.etype == type && !options.__stop) ln.apply(this, args.concat(ln.ehandle));
-                    });
-                }
-                return options;
-            },
-            stopall(stop) {
-                options.__stop = is.bool(stop) ? stop : true;
-            },
-        };
-        Object.keys(options).forEach(key => {
-            Object.defineProperty(obj, key, {
-                value: options[key],
-                enumerable: false,
-                writable: false,
-            })
-        });
-        return obj;
+    function includes(arr, searchElement) {
+        if (arr.includes) return arr.includes(searchElement);
+        if (!is.array(arr)) arr = [].slice.call(arr);
+        return !arr.length ? false : arr.some(a => a === searchElement);
     }
 
     // Easings functions adapted from http://jqueryui.com/
-
     const easings = (() => {
         let eases = {},
             functions = {
@@ -144,12 +91,13 @@
         ['Quad', 'Cubic', 'Quart', 'Quint', 'Expo'].forEach((name, i) => {
             functions[name] = t => Math.pow(t, i + 2);
         });
-        Object.keys(functions).forEach(name => {
+
+        for (let name in functions) {
             const easeIn = functions[name];
             eases[`easeIn${name}`] = easeIn;
             eases[`easeOut${name}`] = (t, m) => 1 - easeIn(1 - t, m);
             eases[`easeInOut${name}`] = (t, m) => t < 0.5 ? easeIn(t * 2, m) / 2 : 1 - easeIn(t * -2 + 2, m) / 2;
-        });
+        }
         eases.linear = t => t;
         return eases;
     })();
@@ -190,7 +138,7 @@
             return Object.keys(groups).map(group => groups[group]);
         },
 
-        removeArrDupes = arr => arr.filter((item, pos, context) => context.indexOf(item) === pos),
+        dropArrDupes = arr => arr.filter((item, pos, context) => context.indexOf(item) === pos),
 
         // Objects
         dupeObj = o => {
@@ -202,6 +150,63 @@
         mergeObjs = (o1, o2) => {
             for (let p in o2) o1[p] = !is.undef(o1[p]) ? o1[p] : o2[p];
             return o1;
+        },
+
+        eventsys = obj => {
+            if (!is.object(obj)) obj = {};
+            let listeners = new Set;
+
+            function on(type, func) {
+                func.type = type;
+                func.handle = {
+                    on() {
+                        listeners.add(func);
+                        return func.handle;
+                    },
+                    once() {
+                        return once(type, func);
+                    },
+                    off() {
+                        off(func);
+                        return func.handle;
+                    }
+                };
+                listeners.add(func);
+                return func.handle;
+            }
+
+            function off(func) {
+                if (listeners.has(func)) listeners.delete(func);
+                return func.handle;
+            }
+
+            function once(type, func) {
+                if (is.func(func)) {
+                    off(func);
+
+                    function funcwrapper() {
+                        func.apply(obj, arguments);
+                        off(funcwrapper);
+                    }
+                    return on(type, funcwrapper);
+                }
+            }
+
+            obj.listeners = listeners;
+            obj.on = on;
+            obj._once = once;
+            obj.once = event => new Promise(pass => obj._once(event, pass));
+
+            return obj;
+        },
+
+        emit = function (type, anim) {
+            if (anim.listeners.size > 0) {
+                let args = [].slice.call(arguments, 1);
+                anim.listeners.forEach(ln => {
+                    if (ln.type == type) ln.apply(anim, args.concat(ln.handle));
+                });
+            }
         },
 
         // Colors
@@ -246,9 +251,9 @@
 
         // Values
         getAnimationType = (el, prop) => {
-            if ((is.node(el) || is.svg(el)) && includes(validTransforms, prop)) return 'transform';
-            if ((is.node(el) || is.svg(el)) && (prop !== 'transform' && getCSSValue(el, prop))) return 'css';
-            if ((is.node(el) || is.svg(el)) && (el.getAttribute(prop) || (is.svg(el) && el[prop]))) return 'attribute';
+            if ((is.dom(el)) && includes(validTransforms, prop)) return 'transform';
+            if ((is.dom(el)) && (prop !== 'transform' && getCSSValue(el, prop))) return 'css';
+            if ((is.dom(el)) && (el.getAttribute(prop) || (is.svg(el) && el[prop]))) return 'attribute';
             if (!is.null(el[prop]) && !is.undef(el[prop])) return 'object';
         },
 
@@ -256,6 +261,8 @@
             // Then return the property value or fallback to '0' when getPropertyValue fails
             if (prop in el.style) return getComputedStyle(el).getPropertyValue(stringToHyphens(prop)) || '0';
         },
+        // prefix transforms for safari
+        //transform = (getCSSValue(document.body, 'transform') ? '' : '-webkit-') + 'transform',
 
         getTransformValue = (el, prop) => {
             const defaultVal = includes(prop, 'scale') ? 1 : 0,
@@ -301,9 +308,9 @@
         recomposeValue = (numbers, strings, initialStrings) => strings.reduce((a, b, i) => (a + numbers[i - 1] + (b ? b : initialStrings[i - 1]))),
 
         // Animatables
+        filterTargets = targets => targets ? flattenArr(is.array(targets) ? targets.map(toArray) : toArray(targets)) : [],
 
-        getAnimatables = targets => (targets ? (flattenArr(is.array(targets) ? targets.map(toArray) : toArray(targets))) : [])
-        .map((t, i) => ({
+        getAnimatables = targets => filterTargets(targets).map((t, i) => ({
             target: t,
             id: i
         })),
@@ -407,8 +414,8 @@
                 }
             });
             return {
-                properties: removeArrDupes(props).join(', '),
-                elements: removeArrDupes(els)
+                properties: dropArrDupes(props).join(', '),
+                elements: dropArrDupes(els)
             };
         },
 
@@ -443,7 +450,6 @@
         },
 
         // Progress
-
         getTweenProgress = (tween, time) => {
             let elapsed = Math.min(Math.max(time - tween.delay, 0), tween.duration),
                 percent = elapsed / tween.duration,
@@ -457,7 +463,7 @@
         },
 
         setAnimationProgress = (anim, time) => {
-            let transforms;
+            let transforms = {};
             anim.time = Math.min(time, anim.duration);
             anim.progress = (anim.time / anim.duration) * 100;
             anim.tweens.forEach(tween => {
@@ -484,8 +490,9 @@
                 });
             });
             if (transforms)
+                // for (let t in transforms) anim.animatables[t].target.style[transform] = transforms[t].join(' ');
                 for (let t in transforms) anim.animatables[t].target.style.transform = transforms[t].join(' ');
-            anim.emit('update', anim);
+            emit('update', anim);
             return anim;
         },
 
@@ -504,7 +511,7 @@
             anim.properties = getProperties(params, anim.settings);
             anim.tweens = getTweens(anim.animatables, anim.properties);
             anim.duration = anim.tweens.length ? Math.max.apply(Math, anim.tweens.map(tween => tween.totalDuration)) : params.duration / animation.speed;
-            return eventemitter(anim);
+            return eventsys(anim);
         };
 
     // Public
@@ -527,134 +534,101 @@
     };
 
     const animation = params => {
-            let time = {},
-                anim = createAnimation(params);
+        let time = {},
+            anim = createAnimation(params);
 
-            ['complete', 'begin', 'update'].forEach(type => {
-                if (is.func(anim.settings[type])) anim[type == 'update' ? 'on':'once'](type, anim.settings[type]);
-            });
+        ['complete', 'begin', 'update'].forEach(type => {
+            if (is.func(anim.settings[type])) anim[type == 'update' ? 'on' : '_once'](type, anim.settings[type]);
+        });
 
-            anim.tick = now => {
-                if (anim.running) {
-                    anim.ended = false;
-                    time.current = time.last + now - time.start;
-                    let s = anim.settings;
-                    if (time.current >= s.delay) {
-                        if (!anim.started) anim.emit('begin', anim);
-                        anim.started = true;
-                    }
-                    setAnimationProgress(anim, time.current);
-                    if (time.current >= anim.duration) {
-                        if (s.loop) {
-                            time.start = now;
-                            if (s.direction === 'alternate') reverseTweens(anim, true);
-                            if (is.number(s.loop)) s.loop--;
-                        } else {
-                            anim.ended = true;
-                            anim.pause();
-                            anim.started = false;
-                            anim.emit('complete', anim);
-                        }
-                    }
-                    time.last = 0;
-                }
-            };
-
-            anim.seek = progress => setAnimationProgress(anim, (progress / 100) * anim.duration);
-
-            anim.pause = () => {
-                anim.running = false;
-                anim.emit('paused', anim);
-                removeWillChange(anim);
-                let i = animations.indexOf(anim);
-                if (i > -1) animations.splice(i, 1);
-                if (!animations.length) engine.pause();
-                return anim;
-            };
-
-            anim.play = params => {
-                if (params) anim = mergeObjs(createAnimation(mergeObjs(params, anim.settings)), anim);
-                anim.pause();
-                anim.running = true;
-                time.start = typeof performance != "undefined" ? performance.now() : +Date.now();
-                time.last = anim.ended ? 0 : anim.time;
+        anim.tick = now => {
+            if (anim.running) {
+                anim.ended = false;
+                time.current = time.last + now - time.start;
                 let s = anim.settings;
-                if (s.direction === 'reverse') reverseTweens(anim);
-                if (s.direction === 'alternate' && !s.loop) s.loop = 1;
-                setWillChange(anim);
-                animations.push(anim);
-                if (engine.raf == 0) engine.play();
-                return anim;
-            };
-
-            anim.restart = () => {
-                if (anim.reversed) reverseTweens(anim);
-                anim.emit('restart', anim);
-                anim.pause();
-                anim.seek(0);
-                return anim.play();
-            };
-
-            if (typeof Promise != "undefined") {
-                function promise(type) {
-                    Object.defineProperty(anim, type, {
-                        get() {
-                            return new Promise(pass => {
-                                anim.once(type, pass);
-                            });
-                        },
-                    });
+                if (time.current >= s.delay) {
+                    if (!anim.started) emit('begin', anim);
+                    anim.started = true;
                 }
-
-                promise('complete');
-                promise('begin');
-
-            } else console.warn("anime : Your browser doesn't support promises.");
-
-            if (anim.settings.autoplay) anim.play();
-
-            return anim;
-        },
-
-        // Remove on one or multiple targets from all active animations.
-
-        remove = elements => {
-            let targets = flattenArr(is.array(elements) ? elements.map(toArray) : toArray(elements));
-            for (let animation, i = animations.length - 1; i >= 0; i--) {
-                animation = animations[i];
-                for (let tween, t = animation.tweens.length - 1; t >= 0; t--) {
-                    tween = animation.tweens[t];
-                    for (let a = tween.animatables.length - 1; a >= 0; a--) {
-                        if (includes(targets, tween.animatables[a].target)) {
-                            tween.animatables.splice(a, 1);
-                            if (!tween.animatables.length) animation.tweens.splice(t, 1);
-                            if (!animation.tweens.length) animation.pause();
-                        }
+                setAnimationProgress(anim, time.current);
+                if (time.current >= anim.duration) {
+                    if (s.loop) {
+                        time.start = now;
+                        if (s.direction === 'alternate') reverseTweens(anim, true);
+                        if (is.number(s.loop)) s.loop--;
+                    } else {
+                        anim.ended = true;
+                        anim.pause();
+                        anim.started = false;
+                        emit('complete', anim);
                     }
                 }
+                time.last = 0;
             }
         };
 
-    if (typeof Promise !== "undefined") {
+        anim.seek = progress => setAnimationProgress(anim, (progress / 100) * anim.duration);
 
-        animation.alldone = function () {
-            const anims = flattenArr(arguments);
-            return new Promise(pass => {
-                let i = 1;
-                anims.forEach(anim => {
-                    anim.once('complete', () => {
-                        if (i++ === anims.length) pass(anims);
-                    });
-                });
-            });
+        anim.pause = () => {
+            anim.running = false;
+            emit('pause', anim);
+            removeWillChange(anim);
+            let i = animations.indexOf(anim);
+            if (i > -1) animations.splice(i, 1);
+            if (!animations.length) engine.pause();
+            return anim;
+        };
+
+        anim.play = params => {
+            if (params) anim = mergeObjs(createAnimation(mergeObjs(params, anim.settings)), anim);
+            anim.pause();
+            anim.running = true;
+            time.start = performance.now();
+            time.last = anim.ended ? 0 : anim.time;
+            let s = anim.settings;
+            if (s.direction === 'reverse') reverseTweens(anim);
+            if (s.direction === 'alternate' && !s.loop) s.loop = 1;
+            setWillChange(anim);
+            animations.push(anim);
+            if (engine.raf == 0) engine.play();
+            return anim;
+        };
+
+        anim.restart = () => {
+            if (anim.reversed) reverseTweens(anim);
+            emit('restart', anim);
+            anim.pause();
+            anim.seek(0);
+            return anim.play();
+        };
+
+        if (anim.settings.autoplay) anim.play();
+
+        return anim;
+    };
+
+    // Remove on one or multiple targets from all active animations.
+
+    animation.remove = targets => {
+        targets = filterTargets(targets);
+        for (let i = animations.length - 1; i >= 0; i--) {
+            let animation = animations[i],
+                tweens = animation.tweens;
+            for (let t = animation.tweens.length - 1; t >= 0; t--) {
+                let tween = animation.tweens[t];
+                for (let a = tween.animatables.length - 1; a >= 0; a--) {
+                    if (includes(targets, tween.animatables[a].target)) {
+                        tween.animatables.splice(a, 1);
+                        if (!tween.animatables.length) animation.tweens.splice(t, 1);
+                        if (!animation.tweens.length) animation.pause();
+                    }
+                }
+            }
         }
-
     }
-
 
     animation.speed = 1;
     animation.list = animations;
-    animation.remove = remove;
     animation.easings = easings;
     animation.getValue = getInitialTargetValue;
     animation.path = getPathProps;
@@ -663,8 +637,8 @@
     animation.dupeObj = dupeObj;
     animation.mergeObjs = mergeObjs;
     animation.flattenArr = flattenArr;
-    animation.removeArrDupes = removeArrDupes;
-    animation.eventemitter = eventemitter;
+    animation.dropArrDupes = dropArrDupes;
+    animation.eventsys = eventsys;
     animation.play = engine.play;
     animation.pause = engine.pause;
 
