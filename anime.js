@@ -189,6 +189,7 @@
             function once(type, func) {
                 if (is.func(func)) {
                     off(func);
+
                     function funcwrapper() {
                         func.apply(obj, arguments);
                         off(funcwrapper);
@@ -201,14 +202,14 @@
             obj.on = on;
             obj._once = once;
             obj.once = event => new Promise(pass => {
-              obj._once(event, pass);
+                obj._once(event, pass);
             });
 
             return obj;
         },
 
         emit = function (type, anim) {
-            if(type == 'begin') anim.started = true;
+            if (type == 'begin') anim.started = true;
             if (anim.listeners.size > 0) {
                 let args = [].slice.call(arguments, 1);
                 anim.listeners.forEach(ln => {
@@ -498,7 +499,7 @@
                 });
             });
             if (transforms)
-                // for (let t in transforms) anim.animatables[t].target.style[transform] = transforms[t].join(' ');
+            // for (let t in transforms) anim.animatables[t].target.style[transform] = transforms[t].join(' ');
                 for (let t in transforms) anim.animatables[t].target.style.transform = transforms[t].join(' ');
             emit('update', anim);
         },
@@ -542,19 +543,20 @@
 
     const events = ['complete', 'begin', 'update'];
 
-    const animation = params => {
+    const animation = (params, autostop) => {
         let time = {},
             anim = createAnimation(params);
 
+        if (autostop) anim.settings.autoplay = false;
         events.forEach(type => {
             if (is.func(anim.settings[type])) anim[type == 'update' ? 'on' : '_once'](type, anim.settings[type]);
-            if(type != 'update') Object.defineProperty(anim,type,{
-              get() {
-                return new Promise(pass => anim._once(type,pass))
-              },
-              set(fn) {
-                if(is.func(fn)) anim._once(type,fn);
-              }
+            Object.defineProperty(anim, type, {
+                get() {
+                    return new Promise(pass => anim._once(type, pass))
+                },
+                set(fn) {
+                    if (is.func(fn)) anim[type == 'update' ? 'on' : '_once'](type, fn);
+                }
             });
         });
 
@@ -584,7 +586,7 @@
         anim.seek = progress => setAnimationProgress(anim, (progress / 100) * anim.duration);
 
         anim.pause = internal => {
-            if(!internal) emit('pause', anim);
+            if (!internal) emit('pause', anim);
             anim.running = false;
             removeWillChange(anim);
             let i = animations.indexOf(anim);
@@ -621,11 +623,47 @@
         return anim;
     };
 
+    const curry = fn => {
+        const arity = fn.length,
+            curried = (...args) => args.length < arity ? (...more) => curried(...args, ...more) : fn(...args);
+        return curried;
+    };
 
-    animation.all = function(event) {
+    animation.all = function (event) {
         return Promise.all(flattenArr(arguments).slice(1).map(anim => anim.once(event)));
     }
 
+    function chaindo(anims, event, action) {
+        if (event == true) anims.forEach(anim => {
+            anim[action]();
+        });
+        const next = i => () => {
+            if(anims[i]) {
+              anims[i]._once(event,next(i == 0 ? 1 : i + 1));
+              anims[i][action]();
+            }
+        }
+        next(0)();
+        return anims;
+    }
+
+    animation.chain = function () {
+        let anims = flattenArr(arguments);
+        return {
+            play() {
+                return chaindo(anims, 'complete', 'play');
+            },
+            stop() {
+                return chaindo(anims, true, 'stop');
+            },
+            add() {
+                anims.concat(flattenArr(arguments));
+            },
+            remove(anim) {
+                if (includes(anims, anim)) anims = anims.filter(a => !Object.is(anim, a));
+            }
+        };
+    }
 
     // Remove on one or multiple targets from all active animations.
 
@@ -661,6 +699,7 @@
     animation.eventsys = eventsys;
     animation.play = engine.play;
     animation.pause = engine.pause;
+    animation.version = 1.1;
 
 
     return animation;

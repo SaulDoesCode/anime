@@ -42,7 +42,7 @@ var myAnimation = anime({
 * Safari
 * Opera
 * Firefox
-* IE 10+
+* IE 11+ (some things might break but it will work)
 
 ### Quick start
 
@@ -281,7 +281,7 @@ Play, pause, restart and seek the animation.
   myAnimation.begin.then(anim => {
     console.log("Began!"); // Called the animation began.
   });
-  // or
+  // or 
   myAnimation.begin = anim => {
     console.log("Began!"); // Called the animation began.
   };
