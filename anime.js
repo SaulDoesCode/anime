@@ -183,7 +183,6 @@
             function once(type, func) {
                 if (is.func(func)) {
                     off(func);
-
                     function funcwrapper() {
                         func.apply(obj, arguments);
                         off(funcwrapper);
@@ -195,12 +194,15 @@
             obj.listeners = listeners;
             obj.on = on;
             obj._once = once;
-            obj.once = event => new Promise(pass => obj._once(event, pass));
+            obj.once = event => new Promise(pass => {
+              obj._once(event, pass);
+            });
 
             return obj;
         },
 
         emit = function (type, anim) {
+            if(type == 'begin') anim.started = true;
             if (anim.listeners.size > 0) {
                 let args = [].slice.call(arguments, 1);
                 anim.listeners.forEach(ln => {
@@ -493,7 +495,6 @@
                 // for (let t in transforms) anim.animatables[t].target.style[transform] = transforms[t].join(' ');
                 for (let t in transforms) anim.animatables[t].target.style.transform = transforms[t].join(' ');
             emit('update', anim);
-            return anim;
         },
 
         // Animation
@@ -533,23 +534,30 @@
         }
     };
 
+    const events = ['complete', 'begin', 'update'];
+
     const animation = params => {
         let time = {},
             anim = createAnimation(params);
 
-        ['complete', 'begin', 'update'].forEach(type => {
+        events.forEach(type => {
             if (is.func(anim.settings[type])) anim[type == 'update' ? 'on' : '_once'](type, anim.settings[type]);
+            if(type != 'update') Object.defineProperty(anim,type,{
+              get() {
+                return new Promise(pass => anim._once(type,pass))
+              },
+              set(fn) {
+                if(is.func(fn)) anime.once(type,fn);
+              }
+            });
         });
+
 
         anim.tick = now => {
             if (anim.running) {
                 anim.ended = false;
                 time.current = time.last + now - time.start;
                 let s = anim.settings;
-                if (time.current >= s.delay) {
-                    if (!anim.started) emit('begin', anim);
-                    anim.started = true;
-                }
                 setAnimationProgress(anim, time.current);
                 if (time.current >= anim.duration) {
                     if (s.loop) {
@@ -558,20 +566,20 @@
                         if (is.number(s.loop)) s.loop--;
                     } else {
                         anim.ended = true;
-                        anim.pause();
-                        anim.started = false;
+                        anim.pause(true);
                         emit('complete', anim);
                     }
+                    emit('begin', anim);
+                    time.last = 0;
                 }
-                time.last = 0;
             }
         };
 
         anim.seek = progress => setAnimationProgress(anim, (progress / 100) * anim.duration);
 
-        anim.pause = () => {
+        anim.pause = internal => {
+            if(!internal) emit('pause', anim);
             anim.running = false;
-            emit('pause', anim);
             removeWillChange(anim);
             let i = animations.indexOf(anim);
             if (i > -1) animations.splice(i, 1);
@@ -581,7 +589,7 @@
 
         anim.play = params => {
             if (params) anim = mergeObjs(createAnimation(mergeObjs(params, anim.settings)), anim);
-            anim.pause();
+            anim.pause(true);
             anim.running = true;
             time.start = performance.now();
             time.last = anim.ended ? 0 : anim.time;
@@ -597,7 +605,7 @@
         anim.restart = () => {
             if (anim.reversed) reverseTweens(anim);
             emit('restart', anim);
-            anim.pause();
+            anim.pause(true);
             anim.seek(0);
             return anim.play();
         };
@@ -626,7 +634,7 @@
                     if (includes(targets, tween.animatables[a].target)) {
                         tween.animatables.splice(a, 1);
                         if (!tween.animatables.length) animation.tweens.splice(t, 1);
-                        if (!animation.tweens.length) animation.pause();
+                        if (!animation.tweens.length) animation.pause(true);
                     }
                 }
             }
