@@ -298,6 +298,8 @@ Play, pause, restart and seek the animation.
   listener.off();
   // later
   listener.on();
+  // change it to once
+  listener.once();
 
   myAnimation.once('pause').then(anim => {
     console.log("the animation was paused!"); // called on pause
@@ -435,8 +437,41 @@ a certain value
 anime.includes([1,2,3,4], 4); // -> true returns true there is indeed a 4 in the array
 ```
 
+### anime.flattenArr(array)
+
+flattens arrays
+
+```javascript
+anime.flattenArr([1,2,[3,4,[5]]]); // -> [1,2,3,4,5]
+```
+
+### anime.dropArrDupes(array)
+
+removes dulicate values from arrays
+
+```javascript
+anime.dropArrDupes([1,2,3,3,3,3,4,5]); // -> [1,2,3,4,5]
+```
+
+### anime.cloneObj(obj)
+
+clones objects
+
+```javascript
+  anime.cloneObj({ a : 1 , b : { c : 2}}); // -> { a : 1 , b : { c : 2}}
+```
+
+### anime.mergeObjs(array)
+
+merges objects, similar to Object.assign
+
+```javascript
+  anime.mergeObjs({ a : 1 } , { b : { c : 2}}); // -> { a : 1 , b : { c : 2}}
+```
+
+
 ====
 
-[MIT License](LICENSE.md). © 2016 [Julian Garnier](http://juliangarnier.com).
+[MIT License](LICENSE.md). © 2016 Julian Garnier
 
 Big thanks to [Animate Plus](https://github.com/bendc/animateplus) and [Velocity](https://github.com/julianshapiro/velocity) that inspired `anime.js` API, and [jQuery UI](https://jqueryui.com/) from which the easing functions come from.
