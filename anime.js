@@ -1,9 +1,9 @@
-/*
- * Anime v1.1.0 - ES6 version
+/**
  * http://anime-js.com
  * JavaScript animation engine
- * Copyright (c) 2016 Julian Garnier
- * http://juliangarnier.com
+ * @version anime-next v1.0.0 ES6 version
+ * @author Julian Garnier, Saul van der Walt
+ * @copyright (c) 2016 Julian Garnier
  * Released under the MIT license
  */
 (function (root, factory) {
@@ -60,7 +60,13 @@
         color: a => (is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a))
     }
 
-
+    /**
+     * checks if an array or arraylike object
+     * contains a certain value
+     * synonym for Array.includes
+     * @param (arraylike|array) arr
+     * @param (*) searchElement - value to search for
+     */
     function includes(arr, searchElement) {
         if (arr.includes) return arr.includes(searchElement);
         if (!is.array(arr)) arr = [].slice.call(arr);
