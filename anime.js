@@ -147,7 +147,7 @@
         dropArrDupes = arr => arr.filter((item, pos, context) => context.indexOf(item) === pos),
 
         // Objects
-        dupeObj = o => {
+        cloneObj = o => {
             let newObject = {};
             for (let p in o) newObject[p] = o[p];
             return newObject;
@@ -329,7 +329,7 @@
             let props = [];
             for (let p in params) {
                 if (!defaultSettings.hasOwnProperty(p) && p !== 'targets') {
-                    let prop = is.object(params[p]) ? dupeObj(params[p]) : {
+                    let prop = is.object(params[p]) ? cloneObj(params[p]) : {
                         value: params[p]
                     };
                     prop.name = p;
@@ -371,7 +371,7 @@
                     let animType = getAnimationType(target, prop.name);
                     if (animType) {
                         let values = getPropertiesValues(target, prop.name, prop.value, i),
-                            tween = dupeObj(prop);
+                            tween = cloneObj(prop);
                         tween.animatables = animatable;
                         tween.type = animType;
                         tween.from = getTweenValues(prop.name, values, tween.type, target).from;
@@ -391,7 +391,7 @@
             let tweensProps = getTweensProps(animatables, props),
                 splittedProps = groupArrayByProps(tweensProps, ['name', 'from', 'to', 'delay', 'duration']);
             return splittedProps.map(tweenProps => {
-                let tween = dupeObj(tweenProps[0]);
+                let tween = cloneObj(tweenProps[0]);
                 tween.animatables = tweenProps.map(p => p.animatables);
                 tween.totalDuration = tween.delay + tween.duration;
                 return tween;
@@ -654,7 +654,7 @@
     animation.path = getPathProps;
     animation.random = random;
     animation.includes = includes;
-    animation.dupeObj = dupeObj;
+    animation.cloneObj = cloneObj;
     animation.mergeObjs = mergeObjs;
     animation.flattenArr = flattenArr;
     animation.dropArrDupes = dropArrDupes;

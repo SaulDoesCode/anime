@@ -193,7 +193,7 @@
         return context.indexOf(item) === pos;
       });
     }, // Objects
-    dupeObj = function(o) {
+    cloneObj = function(o) {
       var newObject = {};
       for (var p in o) {
         newObject[p] = o[p];
@@ -379,7 +379,7 @@
       var props = [];
       for (var p in params) {
         if (!defaultSettings.hasOwnProperty(p) && p !== 'targets') {
-          var prop = is.object(params[p]) ? dupeObj(params[p]) : {
+          var prop = is.object(params[p]) ? cloneObj(params[p]) : {
             value: params[p]
           };
           prop.name = p;
@@ -418,7 +418,7 @@
           var animType = getAnimationType(target, prop.name);
           if (animType) {
             var values = getPropertiesValues(target, prop.name, prop.value, i),
-              tween = dupeObj(prop);
+              tween = cloneObj(prop);
             tween.animatables = animatable;
             tween.type = animType;
             tween.from = getTweenValues(prop.name, values, tween.type, target).from;
@@ -436,7 +436,7 @@
       var tweensProps = getTweensProps(animatables, props),
         splittedProps = groupArrayByProps(tweensProps, ['name', 'from', 'to', 'delay', 'duration']);
       return splittedProps.map(function(tweenProps) {
-        var tween = dupeObj(tweenProps[0]);
+        var tween = cloneObj(tweenProps[0]);
         tween.animatables = tweenProps.map(function(p) {
           return p.animatables;
         });
@@ -683,7 +683,7 @@
   animation.path = getPathProps;
   animation.random = random;
   animation.includes = includes;
-  animation.dupeObj = dupeObj;
+  animation.cloneObj = cloneObj;
   animation.mergeObjs = mergeObjs;
   animation.flattenArr = flattenArr;
   animation.dropArrDupes = dropArrDupes;
