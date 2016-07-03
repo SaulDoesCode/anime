@@ -247,13 +247,14 @@
       obj._once = once;
       obj.once = function(event) {
         return new Promise(function(pass) {
-          return obj._once(event, pass);
+          obj._once(event, pass);
         });
       };
       return obj;
     },
     emit = function(type, anim) {
       var _arguments = arguments;
+      if (type == 'begin') anim.started = true;
       if (anim.listeners.size > 0) {
         (function() {
           var args = [].slice.call(_arguments, 1);
@@ -536,7 +537,6 @@
         anim.animatables[t].target.style.transform = transforms[t].join(' ');
       }
       emit('update', anim);
-      return anim;
     }, // Animation
     createAnimation = function(params) {
       var anim = {
@@ -572,21 +572,28 @@
         engine.play();
       }
     },
+    events = ['complete', 'begin', 'update'],
     animation = function(params) {
       var time = {},
         anim = createAnimation(params);
-      ['complete', 'begin', 'update'].forEach(function(type) {
+      events.forEach(function(type) {
         if (is.func(anim.settings[type])) anim[type == 'update' ? 'on' : '_once'](type, anim.settings[type]);
+        if (type != 'update') Object.defineProperty(anim, type, {
+          get: function() {
+            return new Promise(function(pass) {
+              return anim._once(type, pass);
+            });
+          },
+          set: function(fn) {
+            if (is.func(fn)) anim._once(type, fn);
+          }
+        });
       });
       anim.tick = function(now) {
         if (anim.running) {
           anim.ended = false;
           time.current = time.last + now - time.start;
           var s = anim.settings;
-          if (time.current >= s.delay) {
-            if (!anim.started) emit('begin', anim);
-            anim.started = true;
-          }
           setAnimationProgress(anim, time.current);
           if (time.current >= anim.duration) {
             if (s.loop) {
@@ -595,20 +602,20 @@
               if (is.number(s.loop)) s.loop--;
             } else {
               anim.ended = true;
-              anim.pause();
-              anim.started = false;
+              anim.pause(true);
               emit('complete', anim);
             }
+            emit('begin', anim);
+            time.last = 0;
           }
-          time.last = 0;
         }
       };
       anim.seek = function(progress) {
         return setAnimationProgress(anim, progress / 100 * anim.duration);
       };
-      anim.pause = function() {
+      anim.pause = function(internal) {
+        if (!internal) emit('pause', anim);
         anim.running = false;
-        emit('pause', anim);
         removeWillChange(anim);
         var i = animations.indexOf(anim);
         if (i > -1) animations.splice(i, 1);
@@ -617,7 +624,7 @@
       };
       anim.play = function(params) {
         if (params) anim = mergeObjs(createAnimation(mergeObjs(params, anim.settings)), anim);
-        anim.pause();
+        anim.pause(true);
         anim.running = true;
         time.start = performance.now();
         time.last = anim.ended ? 0 : anim.time;
@@ -632,7 +639,7 @@
       anim.restart = function() {
         if (anim.reversed) reverseTweens(anim);
         emit('restart', anim);
-        anim.pause();
+        anim.pause(true);
         anim.seek(0);
         return anim.play();
       };
@@ -656,7 +663,7 @@
           if (includes(targets, tween.animatables[a].target)) {
             tween.animatables.splice(a, 1);
             if (!tween.animatables.length) _animation.tweens.splice(t, 1);
-            if (!_animation.tweens.length) _animation.pause();
+            if (!_animation.tweens.length) _animation.pause(true);
           }
         }
       }
