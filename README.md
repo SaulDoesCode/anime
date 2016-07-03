@@ -281,7 +281,7 @@ Play, pause, restart and seek the animation.
   myAnimation.begin.then(anim => {
     console.log("Began!"); // Called the animation began.
   });
-  // or 
+  // or
   myAnimation.begin = anim => {
     console.log("Began!"); // Called the animation began.
   };
@@ -310,7 +310,8 @@ Play, pause, restart and seek the animation.
 
 ```
 
-Further examples of Promise Use with events
+###### Handling Multiple animations at once
+
 ```js
 
 
@@ -319,7 +320,8 @@ let anims = Array.from(document.querySelectorAll('div'))
             .map(el => anime({
                 targets: el,
                 translateY : -30,
-                duration: anime.random(100,2000)
+                duration: anime.random(100,2000),
+                autoplay : false,
             }));
 
 
@@ -342,7 +344,32 @@ let anims = Array.from(document.querySelectorAll('div'))
     console.log('all the animations started! :D',anims);
   });
 
+  // anime.chain allows you to
+  anime.chain(anims).play();
 
+  let chain = anime.chain(animation1,animation2,animation3);
+  // you can add to chains
+  chain.add(animation4);
+  // and remove from them
+  chain.remove(animation1);
+
+  // use chain.Do to apply an action to
+  // the animations in the chain
+  // chain.Do( event | true , string | function )
+  chain.Do('complete','restart');
+  // adding true makes actions imediate
+  chain.Do(true, anim => {
+    // do something to all
+    // animations in the chain
+  });
+  chain.Do(true,'pause');
+
+  // available chain actions are
+  chain.play
+  chain.pause
+  chain.stop
+  chain.restart
+  // use chain.Do for anything else
 ```
 
 [Live example on CodePen](http://codepen.io/juliangarnier/pen/d1cf92b2af5bb4166cde511e233e8a0d?editors=0010)

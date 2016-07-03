@@ -623,24 +623,26 @@
         return anim;
     };
 
-    const curry = fn => {
+    /*const curry = fn => {
         const arity = fn.length,
             curried = (...args) => args.length < arity ? (...more) => curried(...args, ...more) : fn(...args);
         return curried;
-    };
+    };*/
 
     animation.all = function (event) {
         return Promise.all(flattenArr(arguments).slice(1).map(anim => anim.once(event)));
     }
 
     function chaindo(anims, event, action) {
+        let actionfn = false;
+        if(is.func(action)) actionfn = true;
         if (event == true) anims.forEach(anim => {
-            anim[action]();
+            actionfn ? action(anim) : anim[action]();
         });
         const next = i => () => {
             if(anims[i]) {
-              anims[i]._once(event,next(i == 0 ? 1 : i + 1));
-              anims[i][action]();
+              anims[i]._once(event, next(i == 0 ? 1 : i + 1));
+              actionfn ? action(anims[i]) : anims[i][action]();
             }
         }
         next(0)();
@@ -653,6 +655,12 @@
             play() {
                 return chaindo(anims, 'complete', 'play');
             },
+            pause() {
+              return chaindo(anims, true, 'pause');
+            },
+            restart() {
+              return chaindo(anims, true, 'restart');
+            },
             stop() {
                 return chaindo(anims, true, 'stop');
             },
@@ -661,7 +669,10 @@
             },
             remove(anim) {
                 if (includes(anims, anim)) anims = anims.filter(a => !Object.is(anim, a));
-            }
+            },
+            Do(event,action) {
+              return chaindo(anims,event,action);
+            },
         };
     }
 
@@ -696,6 +707,7 @@
     animation.mergeObjs = mergeObjs;
     animation.flattenArr = flattenArr;
     animation.dropArrDupes = dropArrDupes;
+    animation.chaindo = chaindo;
     animation.eventsys = eventsys;
     animation.play = engine.play;
     animation.pause = engine.pause;
