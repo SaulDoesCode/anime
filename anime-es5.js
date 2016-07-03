@@ -580,19 +580,20 @@
       }
     },
     events = ['complete', 'begin', 'update'],
-    animation = function(params) {
+    animation = function(params, autostop) {
       var time = {},
         anim = createAnimation(params);
+      if (autostop) anim.settings.autoplay = false;
       events.forEach(function(type) {
         if (is.func(anim.settings[type])) anim[type == 'update' ? 'on' : '_once'](type, anim.settings[type]);
-        if (type != 'update') Object.defineProperty(anim, type, {
+        Object.defineProperty(anim, type, {
           get: function() {
             return new Promise(function(pass) {
               return anim._once(type, pass);
             });
           },
           set: function(fn) {
-            if (is.func(fn)) anim._once(type, fn);
+            if (is.func(fn)) anim[type == 'update' ? 'on' : '_once'](type, fn);
           }
         });
       });
@@ -654,10 +655,61 @@
       return anim;
     }; // Strings
   // Public
+  /*const curry = fn => {
+          const arity = fn.length,
+              curried = (...args) => args.length < arity ? (...more) => curried(...args, ...more) : fn(...args);
+          return curried;
+      };*/
   animation.all = function(event) {
     return Promise.all(flattenArr(arguments).slice(1).map(function(anim) {
       return anim.once(event);
     }));
+  };
+
+  function chaindo(anims, event, action) {
+    var actionfn = false;
+    if (is.func(action)) actionfn = true;
+    if (event == true) anims.forEach(function(anim) {
+      actionfn ? action(anim) : anim[action]();
+    });
+    var next = function(i) {
+      return function() {
+        if (anims[i]) {
+          anims[i]._once(event, next(i == 0 ? 1 : i + 1));
+          actionfn ? action(anims[i]) : anims[i][action]();
+        }
+      };
+    };
+    next(0)();
+    return anims;
+  }
+  animation.chain = function() {
+    var anims = flattenArr(arguments);
+    return {
+      play: function() {
+        return chaindo(anims, 'complete', 'play');
+      },
+      pause: function() {
+        return chaindo(anims, true, 'pause');
+      },
+      restart: function() {
+        return chaindo(anims, true, 'restart');
+      },
+      stop: function() {
+        return chaindo(anims, true, 'stop');
+      },
+      add: function() {
+        anims.concat(flattenArr(arguments));
+      },
+      remove: function(anim) {
+        if (includes(anims, anim)) anims = anims.filter(function(a) {
+          return !Object.is(anim, a);
+        });
+      },
+      Do: function(event, action) {
+        return chaindo(anims, event, action);
+      }
+    };
   }; // Remove on one or multiple targets from all active animations.
   animation.remove = function(targets) {
     targets = filterTargets(targets);
@@ -687,8 +739,10 @@
   animation.mergeObjs = mergeObjs;
   animation.flattenArr = flattenArr;
   animation.dropArrDupes = dropArrDupes;
+  animation.chaindo = chaindo;
   animation.eventsys = eventsys;
   animation.play = engine.play;
   animation.pause = engine.pause;
+  animation.version = 1.1;
   return animation;
 });
