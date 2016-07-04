@@ -1,3 +1,4 @@
+var _this = this;
 /**
  * http://anime-js.com
  * JavaScript animation engine
@@ -15,12 +16,6 @@
 })(this, function() { // Defaults
   var undef = undefined,
     validTransforms = ['translateX', 'translateY', 'translateZ', 'rotate', 'rotateX', 'rotateY', 'rotateZ', 'scale', 'scaleX', 'scaleY', 'scaleZ', 'skewX', 'skewY'],
-    perf = window.performance || {
-      offset: Date.now(),
-      now: function() {
-        return Date.now() - this.offset;
-      }
-    },
     defaultSettings = {
       duration: 1000,
       delay: 0,
@@ -83,7 +78,7 @@
         return is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a);
       }
     },
-    curry = function(fn) {
+    curry = function(fn, ctx) {
       var arity = fn.length,
         curried = function() {
           for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {
@@ -93,16 +88,13 @@
             for (var _len2 = arguments.length, more = Array(_len2), _key2 = 0; _key2 < _len2; _key2++) {
               more[_key2] = arguments[_key2];
             }
-            return curried.apply(undefined, args.concat(more));
-          } : fn.apply(undefined, args);
+            return curried.apply(null, args.concat(more));
+          } : fn.apply(ctx || _this, args);
         };
       return curried;
     },
     iseq = curry(function(a, b) {
       return a === b;
-    }),
-    or = curry(function(a, b) {
-      return a || b;
     }); // Utils
   /**
    * checks if an array or arraylike object
@@ -465,6 +457,11 @@
         if (delays) tween.delay = delayVal;
       });
       anim.reversed = !!anim.reversed;
+    },
+    getTweensDuration = function(tweens) {
+      if (tweens.length) return Math.max.apply(Math, tweens.map(function(tween) {
+        return tween.totalDuration;
+      }));
     }, // will-change
     getWillChange = function(anim) {
       var props = [],
@@ -524,11 +521,12 @@
       return recomposeValue(progress, tween.to.strings, tween.from.strings);
     },
     setAnimationProgress = function(anim, time) {
-      var transforms = {};
-      anim.time = Math.min(time, anim.duration);
-      anim.progress = anim.time / anim.duration * 100;
+      var transforms = {}; //anim.time = Math.min(time, anim.duration);
+      //anim.progress = (anim.time / anim.duration) * 100;
+      anim.currentTime = time;
+      anim.progress = Math.min(Math.max(time, 0), anim.duration) / anim.duration * 100;
       anim.tweens.forEach(function(tween) {
-        tween.currentValue = getTweenProgress(tween, time);
+        tween.currentValue = getTweenProgress(tween, anim.currentTime);
         var progress = tween.currentValue;
         tween.animatables.forEach(function(animatable) {
           var id = animatable.id,
@@ -562,17 +560,14 @@
       var anim = {
         animatables: getAnimatables(params.targets),
         settings: mergeObjs(params, defaultSettings),
-        time: 0,
+        currentTime: 0,
         progress: 0,
-        running: false,
         started: false,
         ended: false
       };
       anim.properties = getProperties(params, anim.settings);
       anim.tweens = getTweens(anim.animatables, anim.properties);
-      anim.duration = anim.tweens.length ? Math.max.apply(Math, anim.tweens.map(function(tween) {
-        return tween.totalDuration;
-      })) : params.duration / animation.speed;
+      anim.duration = getTweensDuration(anim.tweens) || params.duration;
       return eventsys(anim);
     },
     animations = new Set(),
@@ -581,15 +576,16 @@
       play: function() {
         engine.raf = requestAnimationFrame(engine.step);
       },
-      pause: function() {
-        cancelAnimationFrame(engine.raf);
-        engine.raf = 0;
-      },
       step: function(time) {
-        animations.forEach(function(anim) {
-          return anim.tick(time);
-        });
-        engine.play();
+        if (animations.size) {
+          animations.forEach(function(anim) {
+            return anim.tick(time);
+          });
+          engine.play();
+        } else {
+          cancelAnimationFrame(engine.raf);
+          engine.raf = 0;
+        }
       }
     },
     events = ['complete', 'begin', 'update'],
@@ -609,25 +605,24 @@
         });
       });
       anim.tick = function(now) {
-        if (anim.running) {
-          anim.ended = false;
-          time.current = time.last + now - time.start;
-          var s = anim.settings;
-          setAnimationProgress(anim, time.current);
-          if (time.current >= anim.duration) {
-            if (s.loop) {
-              time.start = now;
-              if (s.direction === 'alternate') reverseTweens(anim, true);
-              if (is.number(s.loop)) s.loop--;
-              emit('interloop', anim);
-            } else {
-              anim.ended = true;
-              anim.pause(true);
-              emit('complete', anim);
-            }
-            emit('begin', anim);
-            time.last = 0;
+        anim.ended = false;
+        if (!time.start) time.start = now;
+        time.current = Math.min(Math.max(time.last + now - time.start, 0), anim.duration);
+        var s = anim.settings;
+        setAnimationProgress(anim, time.current);
+        if (time.current >= anim.duration) {
+          if (s.loop) {
+            time.start = now;
+            if (s.direction === 'alternate') reverseTweens(anim, true);
+            if (is.number(s.loop)) s.loop--;
+            emit('interloop', anim);
+          } else {
+            anim.ended = true;
+            anim.pause(true);
+            emit('complete', anim);
           }
+          emit('begin', anim);
+          time.last = 0;
         }
       };
       anim.seek = function(progress) {
@@ -635,18 +630,15 @@
       };
       anim.pause = function(internal) {
         if (!internal) emit('pause', anim);
-        anim.running = false;
+        time.start = 0;
         removeWillChange(anim);
         animations.delete(anim);
-        if (!animations.size) engine.pause();
         return anim;
       };
       anim.play = function(params) {
-        if (params) anim = mergeObjs(createAnimation(mergeObjs(params, anim.settings)), anim);
-        anim.pause(true);
-        anim.running = true;
-        time.start = performance.now();
-        time.last = anim.ended ? 0 : anim.time;
+        if (params) anim = mergeObjs(createAnimation(mergeObjs(params, anim.settings)), anim); //time.start = performance.now();
+        time.start = 0;
+        time.last = anim.ended ? 0 : anim.currentTime;
         var s = anim.settings;
         if (s.direction === 'reverse') reverseTweens(anim);
         if (s.direction === 'alternate' && !s.loop) s.loop = 1;
@@ -693,11 +685,13 @@
     var anims = flattenArr(arguments),
       chain = {
         anims: anims,
+        paused: false,
         play: function() {
-          return chaindo(chain, 'complete', 'play');
+          if (chain.paused) chain.paused = false;
+          return chaindo(chain, chain.paused || 'complete', 'play');
         },
         pause: function() {
-          return chaindo(chain, true, 'pause');
+          return chaindo(chain, chain.paused = true, 'pause');
         },
         restart: function() {
           return chaindo(chain, 'complete', 'restart');
@@ -746,13 +740,12 @@
   animation.getValue = getInitialTargetValue;
   animation.path = getPathProps;
   animation.random = random;
+  animation.curry = curry;
   animation.includes = includes;
   animation.mergeObjs = mergeObjs;
   animation.flattenArr = flattenArr;
   animation.dropArrDupes = dropArrDupes;
   animation.eventsys = eventsys;
-  animation.play = engine.play;
-  animation.pause = engine.pause;
   animation.version = "1.2.0";
   return animation;
 });
