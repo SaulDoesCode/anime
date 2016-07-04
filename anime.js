@@ -20,12 +20,6 @@
     // Defaults
     const undef = undefined,
         validTransforms = ['translateX', 'translateY', 'translateZ', 'rotate', 'rotateX', 'rotateY', 'rotateZ', 'scale', 'scaleX', 'scaleY', 'scaleZ', 'skewX', 'skewY'],
-        perf = (window.performance || {
-            offset: Date.now(),
-            now() {
-                return Date.now() - this.offset
-            }
-        }),
         defaultSettings = {
             duration: 1000,
             delay: 0,
@@ -60,13 +54,12 @@
             color: a => (is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a))
         },
 
-        curry = fn => {
+        curry = (fn, ctx) => {
             const arity = fn.length,
-                curried = (...args) => args.length < arity ? (...more) => curried(...args, ...more) : fn(...args);
+                curried = (...args) => args.length < arity ? (...more) => curried.apply(null,args.concat(more)) : fn.apply(ctx || this, args);
             return curried;
         },
-        iseq = curry((a, b) => a === b),
-        or = curry((a,b) => a || b);
+        iseq = curry((a, b) => a === b);
 
     /**
      * checks if an array or arraylike object
@@ -201,11 +194,11 @@
 
             obj.listeners = listeners;
             obj.on = on;
-            obj.once = (event,fn) => {
-              return is.func(fn) ? once(event, fn) :
-              new Promise(pass => {
-                once(event, pass)
-              });
+            obj.once = (event, fn) => {
+                return is.func(fn) ? once(event, fn) :
+                    new Promise(pass => {
+                        once(event, pass)
+                    });
             }
 
             return obj;
@@ -414,6 +407,11 @@
             anim.reversed = !!anim.reversed;
         },
 
+        getTweensDuration = tweens => {
+            if (tweens.length) return Math.max.apply(Math, tweens.map(function (tween) {
+                return tween.totalDuration;
+            }));
+        },
         // will-change
 
         getWillChange = anim => {
@@ -476,10 +474,12 @@
 
         setAnimationProgress = (anim, time) => {
             let transforms = {};
-            anim.time = Math.min(time, anim.duration);
-            anim.progress = (anim.time / anim.duration) * 100;
+            //anim.time = Math.min(time, anim.duration);
+            //anim.progress = (anim.time / anim.duration) * 100;
+            anim.currentTime = time;
+            anim.progress = (Math.min(Math.max(time, 0), anim.duration) / anim.duration) * 100
             anim.tweens.forEach(tween => {
-                tween.currentValue = getTweenProgress(tween, time);
+                tween.currentValue = getTweenProgress(tween, anim.currentTime);
                 let progress = tween.currentValue;
                 tween.animatables.forEach(animatable => {
                     let id = animatable.id,
@@ -516,15 +516,14 @@
             let anim = {
                 animatables: getAnimatables(params.targets),
                 settings: mergeObjs(params, defaultSettings),
-                time: 0,
+                currentTime: 0,
                 progress: 0,
-                running: false,
                 started: false,
                 ended: false
             };
             anim.properties = getProperties(params, anim.settings);
             anim.tweens = getTweens(anim.animatables, anim.properties);
-            anim.duration = anim.tweens.length ? Math.max.apply(Math, anim.tweens.map(tween => tween.totalDuration)) : params.duration / animation.speed;
+            anim.duration = getTweensDuration(anim.tweens) || params.duration;
             return eventsys(anim);
         };
 
@@ -537,13 +536,14 @@
         play() {
             engine.raf = requestAnimationFrame(engine.step);
         },
-        pause() {
-            cancelAnimationFrame(engine.raf);
-            engine.raf = 0;
-        },
         step(time) {
-            animations.forEach(anim => anim.tick(time));
-            engine.play();
+            if (animations.size) {
+                animations.forEach(anim => anim.tick(time));
+                engine.play();
+            } else {
+                cancelAnimationFrame(engine.raf);
+                engine.raf = 0;
+            }
         }
     };
 
@@ -557,7 +557,7 @@
         events.forEach(type => {
             if (is.func(anim.settings[type])) anim[includes(type, 'update', 'interloop') ? 'on' : 'once'](type, anim.settings[type]);
             Object.defineProperty(anim, type, {
-                get:() => anim.once(type),
+                get: () => anim.once(type),
                 set(fn) {
                     if (is.func(fn)) anim[includes(type, 'update', 'interloop') ? 'on' : 'once'](type, fn);
                 }
@@ -566,25 +566,24 @@
 
 
         anim.tick = now => {
-            if (anim.running) {
-                anim.ended = false;
-                time.current = time.last + now - time.start;
-                let s = anim.settings;
-                setAnimationProgress(anim, time.current);
-                if (time.current >= anim.duration) {
-                    if (s.loop) {
-                        time.start = now;
-                        if (s.direction === 'alternate') reverseTweens(anim, true);
-                        if (is.number(s.loop)) s.loop--;
-                        emit('interloop', anim);
-                    } else {
-                        anim.ended = true;
-                        anim.pause(true);
-                        emit('complete', anim);
-                    }
-                    emit('begin', anim);
-                    time.last = 0;
+            anim.ended = false;
+            if (!time.start) time.start = now;
+            time.current = Math.min(Math.max(time.last + now - time.start, 0), anim.duration);
+            let s = anim.settings;
+            setAnimationProgress(anim, time.current);
+            if (time.current >= anim.duration) {
+                if (s.loop) {
+                    time.start = now;
+                    if (s.direction === 'alternate') reverseTweens(anim, true);
+                    if (is.number(s.loop)) s.loop--;
+                    emit('interloop', anim);
+                } else {
+                    anim.ended = true;
+                    anim.pause(true);
+                    emit('complete', anim);
                 }
+                emit('begin', anim);
+                time.last = 0;
             }
         };
 
@@ -592,19 +591,17 @@
 
         anim.pause = internal => {
             if (!internal) emit('pause', anim);
-            anim.running = false;
+            time.start = 0;
             removeWillChange(anim);
             animations.delete(anim);
-            if (!animations.size) engine.pause();
             return anim;
         };
 
         anim.play = params => {
             if (params) anim = mergeObjs(createAnimation(mergeObjs(params, anim.settings)), anim);
-            anim.pause(true);
-            anim.running = true;
-            time.start = performance.now();
-            time.last = anim.ended ? 0 : anim.time;
+            //time.start = performance.now();
+            time.start = 0;
+            time.last = anim.ended ? 0 : anim.currentTime;
             let s = anim.settings;
             if (s.direction === 'reverse') reverseTweens(anim);
             if (s.direction === 'alternate' && !s.loop) s.loop = 1;
@@ -650,22 +647,26 @@
         let anims = flattenArr(arguments),
             chain = {
                 anims,
-                play: () => chaindo(chain, 'complete', 'play'),
-                pause: () => chaindo(chain, true, 'pause'),
+                paused: false,
+                play() {
+                    if (chain.paused) chain.paused = false;
+                    return chaindo(chain, chain.paused || 'complete', 'play')
+                },
+                pause: () => chaindo(chain, (chain.paused = true), 'pause'),
                 restart: () => chaindo(chain, 'complete', 'restart'),
                 add() {
-                  chain.anims = chain.anims.concat(flattenArr(arguments));
-                  chain.anims.forEach(anim => {
-                    anim.pause(true);
-                    anim.seek(0);
-                  });
-                  return chain;
+                    chain.anims = chain.anims.concat(flattenArr(arguments));
+                    chain.anims.forEach(anim => {
+                        anim.pause(true);
+                        anim.seek(0);
+                    });
+                    return chain;
                 },
                 remove(anim) {
                     if (includes(chain.anims, anim)) chain.anims = chain.anims.filter(a => !Object.is(anim, a));
                     chain.anims.forEach(anim => {
-                      anim.pause(true);
-                      anim.seek(0);
+                        anim.pause(true);
+                        anim.seek(0);
                     });
                     return chain;
                 },
@@ -697,13 +698,12 @@
     animation.getValue = getInitialTargetValue;
     animation.path = getPathProps;
     animation.random = random;
+    animation.curry = curry;
     animation.includes = includes;
     animation.mergeObjs = mergeObjs;
     animation.flattenArr = flattenArr;
     animation.dropArrDupes = dropArrDupes;
     animation.eventsys = eventsys;
-    animation.play = engine.play;
-    animation.pause = engine.pause;
     animation.version = "1.2.0";
 
 
