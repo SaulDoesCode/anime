@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <title>anime.js</title>
+        <meta charset="utf-8">
+        <link rel="icon" type="image/png" href="img/favicon.png" />
+        <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+        <link href="css/styles.css" rel="stylesheet">
+        <style>
+            div {
+                width: 100px;
+                height: 100px;
+            }
+            section {
+              margin: 5px auto;
+            }
+        </style>
+        <script src="../anime.js"></script>
+    </head>
+
+    <body>
+        <section>
+            <article>
+                <div class="blue"></div>
+                <div class="red"></div>
+                <div class="green"></div>
+            </article>
+            <br>
+            <header>Anime Promise example</header>
+            <button onclick="chain.play()">start</button>
+            <button onclick="chain.restart()">restart</button>
+            <button onclick="chain.pause()">pause</button>
+            <br>
+            <button onclick="add()">add</button>
+            <button onclick="remove()">remove</button>
+        </section>
+        <div class="list"></div>
+        <script>
+            var loglist = document.querySelector('div.list');
+            var log = html => loglist.innerHTML += '<br><span>' + html + '</span>';
+
+            var animations = Array.from(document.querySelectorAll('article > div')).map(el => anime({
+                targets: el,
+                autoplay: false,
+                translateX: 140,
+                duration: 1000,
+            }));
+
+            var chain = anime.chain(animations);
+            function add() {
+              let div = document.createElement('div');
+              div.classList.add(['red','blue','green'][anime.random(0,2)]);
+              chain.add(anime({
+                targets: div,
+                autoplay: false,
+                translateX: 140,
+                duration: 1000,
+              }));
+              document.querySelector('article').appendChild(div);
+            }
+            function remove() {
+              chain.remove(chain.anims[chain.anims.length - 1]);
+              let list = document.querySelector('article');
+              list.removeChild(list.lastElementChild);
+            }
+
+        </script>
+    </body>
+
+</html>
