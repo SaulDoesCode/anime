@@ -701,7 +701,6 @@
     animation.mergeObjs = mergeObjs;
     animation.flattenArr = flattenArr;
     animation.dropArrDupes = dropArrDupes;
-    animation.chaindo = chaindo;
     animation.eventsys = eventsys;
     animation.play = engine.play;
     animation.pause = engine.pause;
