@@ -201,10 +201,12 @@
 
             obj.listeners = listeners;
             obj.on = on;
-            obj._once = once;
-            obj.once = event => new Promise(pass => {
-                obj._once(event, pass);
-            });
+            obj.once = (event,fn) => {
+              return is.func(fn) ? once(event, fn) :
+              new Promise(pass => {
+                once(event, pass)
+              });
+            }
 
             return obj;
         },
@@ -553,13 +555,11 @@
 
         if (autostop) anim.settings.autoplay = false;
         events.forEach(type => {
-            if (is.func(anim.settings[type])) anim[includes(type, 'update', 'interloop') ? 'on' : '_once'](type, anim.settings[type]);
+            if (is.func(anim.settings[type])) anim[includes(type, 'update', 'interloop') ? 'on' : 'once'](type, anim.settings[type]);
             Object.defineProperty(anim, type, {
-                get() {
-                    return new Promise(pass => anim._once(type, pass))
-                },
+                get:() => anim.once(type),
                 set(fn) {
-                    if (is.func(fn)) anim[includes(type, 'update', 'interloop') ? 'on' : '_once'](type, fn);
+                    if (is.func(fn)) anim[includes(type, 'update', 'interloop') ? 'on' : 'once'](type, fn);
                 }
             });
         });
@@ -639,7 +639,7 @@
         const next = i => () => {
             if (chain.anims[i]) {
                 actionfn ? action(chain.anims[i]) : chain.anims[i][action]();
-                chain.anims[i]._once(event, next(i == 0 ? 1 : i + 1));
+                chain.anims[i].once(event, next(i == 0 ? 1 : i + 1));
             }
             return chain;
         }
