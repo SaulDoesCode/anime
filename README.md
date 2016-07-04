@@ -249,22 +249,22 @@ anime({
 
 [Live example on CodePen](http://codepen.io/juliangarnier/pen/d1cf92b2af5bb4166cde511e233e8a0d?editors=0010)
 
-## Playback controls
+## Playback controls and Events
 
 ![Playback controls](http://anime-js.com/img/gifs/playback-controls.gif)
 
-Play, pause, restart and seek the animation.
+Events Play, pause, restart and seek the animation.
 
-| Names | Infos | Arguments
+| Names | Infos | Arguments | Returns
 | --- | --- | ---
-| `.play()` | Play the animation | animation parameters object
-| `.pause()` | Pause the animation | none
-| `.restart()` | Restart the animation | animation parameters object
-| `.seek()` | Advance in the animation | a percentage, or an object {time: 1250}
-| `.on()` | handle events on an animation | listener object -> { off, on }
-| `.once()` | handle an event on an animation once | Promise
-| `.complete` | handle an event on an animation once | Promise
-| `.begin` | handle an event on an animation once | Promise
+| `.play()` | Play the animation | animation parameters object | animation
+| `.pause()` | Pause the animation | none | animation
+| `.restart()` | Restart the animation | animation parameters object | animation
+| `.seek()` | Advance in the animation | a percentage, or an object {time: 1250} | none
+| `.on()` | handle events on an animation | event type and function | listener object -> { off, on }
+| `.once()` | handle an event on an animation once | event type + optional callback func | Promise or event listener
+| `.complete` | handle an event on an animation once | none | Promise
+| `.begin` | handle an event on an animation once | none | Promise
 
 ```javascript
   var myAnimation = anime({
