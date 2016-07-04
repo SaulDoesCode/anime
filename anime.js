@@ -1,7 +1,7 @@
 /**
  * http://anime-js.com
  * JavaScript animation engine
- * @version anime-next v1.0.0 ES6 version
+ * @version anime-next v1.2.0 ES6 version
  * @author Julian Garnier, Saul van der Walt
  * @copyright (c) 2016 Julian Garnier
  * Released under the MIT license
@@ -705,7 +705,7 @@
     animation.eventsys = eventsys;
     animation.play = engine.play;
     animation.pause = engine.pause;
-    animation.version = 1.1;
+    animation.version = "1.2.0";
 
 
     return animation;
