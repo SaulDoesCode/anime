@@ -1,7 +1,7 @@
 /**
  * http://anime-js.com
  * JavaScript animation engine
- * @version anime-next v1.0.0 ES6 version
+ * @version anime-next v1.2.0 ES6 version
  * @author Julian Garnier, Saul van der Walt
  * @copyright (c) 2016 Julian Garnier
  * Released under the MIT license
@@ -263,10 +263,9 @@
       }
       obj.listeners = listeners;
       obj.on = on;
-      obj._once = once;
-      obj.once = function(event) {
-        return new Promise(function(pass) {
-          obj._once(event, pass);
+      obj.once = function(event, fn) {
+        return is.func(fn) ? once(event, fn) : new Promise(function(pass) {
+          once(event, pass);
         });
       };
       return obj;
@@ -599,15 +598,13 @@
         anim = createAnimation(params);
       if (autostop) anim.settings.autoplay = false;
       events.forEach(function(type) {
-        if (is.func(anim.settings[type])) anim[includes(type, 'update', 'interloop') ? 'on' : '_once'](type, anim.settings[type]);
+        if (is.func(anim.settings[type])) anim[includes(type, 'update', 'interloop') ? 'on' : 'once'](type, anim.settings[type]);
         Object.defineProperty(anim, type, {
           get: function() {
-            return new Promise(function(pass) {
-              return anim._once(type, pass);
-            });
+            return anim.once(type);
           },
           set: function(fn) {
-            if (is.func(fn)) anim[includes(type, 'update', 'interloop') ? 'on' : '_once'](type, fn);
+            if (is.func(fn)) anim[includes(type, 'update', 'interloop') ? 'on' : 'once'](type, fn);
           }
         });
       });
@@ -685,7 +682,7 @@
       return function() {
         if (chain.anims[i]) {
           actionfn ? action(chain.anims[i]) : chain.anims[i][action]();
-          chain.anims[i]._once(event, next(i == 0 ? 1 : i + 1));
+          chain.anims[i].once(event, next(i == 0 ? 1 : i + 1));
         }
         return chain;
       };
@@ -753,10 +750,9 @@
   animation.mergeObjs = mergeObjs;
   animation.flattenArr = flattenArr;
   animation.dropArrDupes = dropArrDupes;
-  animation.chaindo = chaindo;
   animation.eventsys = eventsys;
   animation.play = engine.play;
   animation.pause = engine.pause;
-  animation.version = 1.1;
+  animation.version = "1.2.0";
   return animation;
 });
