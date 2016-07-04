@@ -367,7 +367,6 @@ let anims = Array.from(document.querySelectorAll('div'))
   // available chain actions are
   chain.play
   chain.pause
-  chain.stop
   chain.restart
   // use chain.Do for anything else
 ```

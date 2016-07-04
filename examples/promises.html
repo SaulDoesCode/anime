@@ -27,6 +27,8 @@
 <div class="list"></div>
 <script src="../anime.js"></script>
 <script>
+  var loglist = document.querySelector('div.list');
+  var log = html => loglist.innerHTML += '<br><span>'+html+'</span>';
 
   var myAnimation = anime({
     targets: 'article > div',
@@ -47,16 +49,17 @@
    */
 
   let happened = false;
-  myAnimation.on('begin',function(anim) {
+  myAnimation.on('begin',anim => {
     console.log('animation began');
-    loglist.innerHTML += happened ? '<br><span>animation began but the complete event listener won\'t be called because promise based events can only recieve an event once</span>' :
-    '<br><span>animation begin</span>';
+    log(happened ?
+    'animation began but the complete event listener won\'t be called because promise based events can only recieve an event once' :
+    'animation begin</span>');
     happened = false;
   });
 
   myAnimation.once('complete').then(function(anim) {
     console.log('animation completed');
-    loglist.innerHTML += '<br><span>animation end</span>';
+    log('animation end');
     happened = true;
     anim.play(); // will re-play the animation only once
   });

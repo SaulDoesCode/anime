@@ -41,24 +41,32 @@
     // Utils
 
     const is = {
-        array: Array.isArray,
-        object: a => includes(Object.prototype.toString.call(a), 'Object'),
-        html: a => (a instanceof NodeList || a instanceof HTMLCollection),
-        node: a => a.nodeType,
-        bool: a => typeof a === 'boolean',
-        svg: a => a instanceof SVGElement,
-        dom: a => is.node(a) || is.svg(a),
-        number: a => !isNaN(parseInt(a)),
-        string: a => typeof a === 'string',
-        func: a => typeof a === 'function',
-        undef: a => typeof a === 'undefined',
-        null: a => typeof a === 'null',
-        hex: a => /(^#[0-9A-F]{6}$)|(^#[0-9A-F]{3}$)/i.test(a),
-        rgb: a => /^rgb/.test(a),
-        rgba: a => /^rgba/.test(a),
-        hsl: a => /^hsl/.test(a),
-        color: a => (is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a))
-    }
+            array: Array.isArray,
+            object: a => includes(Object.prototype.toString.call(a), 'Object'),
+            html: a => (a instanceof NodeList || a instanceof HTMLCollection),
+            node: a => a.nodeType,
+            bool: a => typeof a === 'boolean',
+            svg: a => a instanceof SVGElement,
+            dom: a => is.node(a) || is.svg(a),
+            number: a => !isNaN(parseInt(a)),
+            string: a => typeof a === 'string',
+            func: a => typeof a === 'function',
+            undef: a => typeof a === 'undefined',
+            null: a => typeof a === 'null',
+            hex: a => /(^#[0-9A-F]{6}$)|(^#[0-9A-F]{3}$)/i.test(a),
+            rgb: a => /^rgb/.test(a),
+            rgba: a => /^rgba/.test(a),
+            hsl: a => /^hsl/.test(a),
+            color: a => (is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a))
+        },
+
+        curry = fn => {
+            const arity = fn.length,
+                curried = (...args) => args.length < arity ? (...more) => curried(...args, ...more) : fn(...args);
+            return curried;
+        },
+        iseq = curry((a, b) => a === b),
+        or = curry((a,b) => a || b);
 
     /**
      * checks if an array or arraylike object
@@ -70,7 +78,7 @@
     function includes(arr, searchElement) {
         if (arr.includes) return arr.includes(searchElement);
         if (!is.array(arr)) arr = [].slice.call(arr);
-        return !arr.length ? false : arr.some(a => a === searchElement);
+        return !arr.length ? false : arr.some(iseq(searchElement));
     }
 
     // Easings functions adapted from http://jqueryui.com/
@@ -147,11 +155,6 @@
         dropArrDupes = arr => arr.filter((item, pos, context) => context.indexOf(item) === pos),
 
         // Objects
-        cloneObj = o => {
-            let newObject = {};
-            for (let p in o) newObject[p] = o[p];
-            return newObject;
-        },
 
         mergeObjs = (o1, o2) => {
             for (let p in o2) o1[p] = !is.undef(o1[p]) ? o1[p] : o2[p];
@@ -169,9 +172,7 @@
                         listeners.add(func);
                         return func.handle;
                     },
-                    once() {
-                        return once(type, func);
-                    },
+                    once: () => once(type, func),
                     off() {
                         off(func);
                         return func.handle;
@@ -330,7 +331,7 @@
             let props = [];
             for (let p in params) {
                 if (!defaultSettings.hasOwnProperty(p) && p !== 'targets') {
-                    let prop = is.object(params[p]) ? cloneObj(params[p]) : {
+                    let prop = is.object(params[p]) ? Object.create(params[p]) : {
                         value: params[p]
                     };
                     prop.name = p;
@@ -372,7 +373,7 @@
                     let animType = getAnimationType(target, prop.name);
                     if (animType) {
                         let values = getPropertiesValues(target, prop.name, prop.value, i),
-                            tween = cloneObj(prop);
+                            tween = Object.create(prop);
                         tween.animatables = animatable;
                         tween.type = animType;
                         tween.from = getTweenValues(prop.name, values, tween.type, target).from;
@@ -392,7 +393,7 @@
             let tweensProps = getTweensProps(animatables, props),
                 splittedProps = groupArrayByProps(tweensProps, ['name', 'from', 'to', 'delay', 'duration']);
             return splittedProps.map(tweenProps => {
-                let tween = cloneObj(tweenProps[0]);
+                let tween = Object.create(tweenProps[0]);
                 tween.animatables = tweenProps.map(p => p.animatables);
                 tween.totalDuration = tween.delay + tween.duration;
                 return tween;
@@ -479,16 +480,19 @@
                 tween.currentValue = getTweenProgress(tween, time);
                 let progress = tween.currentValue;
                 tween.animatables.forEach(animatable => {
-                    let id = animatable.id;
+                    let id = animatable.id,
+                        tname = tween.name,
+                        target = animatable.target;
+
                     switch (tween.type) {
                         case 'css':
-                            animatable.target.style[tween.name] = progress;
+                            target.style[tname] = progress;
                             break;
                         case 'attribute':
-                            animatable.target.setAttribute(tween.name, progress);
+                            target.setAttribute(tname, progress);
                             break;
                         case 'object':
-                            animatable.target[tween.name] = progress;
+                            target[tname] = progress;
                             break;
                         case 'transform':
                             if (!transforms) transforms = {};
@@ -499,8 +503,8 @@
                 });
             });
             if (transforms)
-            // for (let t in transforms) anim.animatables[t].target.style[transform] = transforms[t].join(' ');
                 for (let t in transforms) anim.animatables[t].target.style.transform = transforms[t].join(' ');
+            // for (let t in transforms) anim.animatables[t].target.style[transform] = transforms[t].join(' ');
             emit('update', anim);
         },
 
@@ -524,7 +528,7 @@
 
     // Public
 
-    let animations = [];
+    let animations = new Set;
 
     const engine = {
         raf: 0,
@@ -536,7 +540,7 @@
             engine.raf = 0;
         },
         step(time) {
-            for (let i = 0; i < animations.length; i++) animations[i].tick(time);
+            animations.forEach(anim => anim.tick(time));
             engine.play();
         }
     };
@@ -549,13 +553,13 @@
 
         if (autostop) anim.settings.autoplay = false;
         events.forEach(type => {
-            if (is.func(anim.settings[type])) anim[type == 'update' ? 'on' : '_once'](type, anim.settings[type]);
+            if (is.func(anim.settings[type])) anim[includes(type, 'update', 'interloop') ? 'on' : '_once'](type, anim.settings[type]);
             Object.defineProperty(anim, type, {
                 get() {
                     return new Promise(pass => anim._once(type, pass))
                 },
                 set(fn) {
-                    if (is.func(fn)) anim[type == 'update' ? 'on' : '_once'](type, fn);
+                    if (is.func(fn)) anim[includes(type, 'update', 'interloop') ? 'on' : '_once'](type, fn);
                 }
             });
         });
@@ -572,6 +576,7 @@
                         time.start = now;
                         if (s.direction === 'alternate') reverseTweens(anim, true);
                         if (is.number(s.loop)) s.loop--;
+                        emit('interloop', anim);
                     } else {
                         anim.ended = true;
                         anim.pause(true);
@@ -589,9 +594,8 @@
             if (!internal) emit('pause', anim);
             anim.running = false;
             removeWillChange(anim);
-            let i = animations.indexOf(anim);
-            if (i > -1) animations.splice(i, 1);
-            if (!animations.length) engine.pause();
+            animations.delete(anim);
+            if (!animations.size) engine.pause();
             return anim;
         };
 
@@ -605,7 +609,7 @@
             if (s.direction === 'reverse') reverseTweens(anim);
             if (s.direction === 'alternate' && !s.loop) s.loop = 1;
             setWillChange(anim);
-            animations.push(anim);
+            animations.add(anim);
             if (engine.raf == 0) engine.play();
             return anim;
         };
@@ -619,72 +623,63 @@
         };
 
         if (anim.settings.autoplay) anim.play();
-
         return anim;
     };
-
-    /*const curry = fn => {
-        const arity = fn.length,
-            curried = (...args) => args.length < arity ? (...more) => curried(...args, ...more) : fn(...args);
-        return curried;
-    };*/
 
     animation.all = function (event) {
         return Promise.all(flattenArr(arguments).slice(1).map(anim => anim.once(event)));
     }
 
-    function chaindo(anims, event, action) {
+    function chaindo(chain, event, action) {
         let actionfn = false;
-        if(is.func(action)) actionfn = true;
-        if (event == true) anims.forEach(anim => {
+        if (is.func(action)) actionfn = true;
+        if (event == true) chain.anims.forEach(anim => {
             actionfn ? action(anim) : anim[action]();
         });
         const next = i => () => {
-            if(anims[i]) {
-              anims[i]._once(event, next(i == 0 ? 1 : i + 1));
-              actionfn ? action(anims[i]) : anims[i][action]();
+            if (chain.anims[i]) {
+                actionfn ? action(chain.anims[i]) : chain.anims[i][action]();
+                chain.anims[i]._once(event, next(i == 0 ? 1 : i + 1));
             }
+            return chain;
         }
-        next(0)();
-        return anims;
+        return next(0)();
     }
 
     animation.chain = function () {
-        let anims = flattenArr(arguments);
-        return {
-            play() {
-                return chaindo(anims, 'complete', 'play');
-            },
-            pause() {
-              return chaindo(anims, true, 'pause');
-            },
-            restart() {
-              return chaindo(anims, true, 'restart');
-            },
-            stop() {
-                return chaindo(anims, true, 'stop');
-            },
-            add() {
-                anims.concat(flattenArr(arguments));
-            },
-            remove(anim) {
-                if (includes(anims, anim)) anims = anims.filter(a => !Object.is(anim, a));
-            },
-            Do(event,action) {
-              return chaindo(anims,event,action);
-            },
-        };
+        let anims = flattenArr(arguments),
+            chain = {
+                anims,
+                play: () => chaindo(chain, 'complete', 'play'),
+                pause: () => chaindo(chain, true, 'pause'),
+                restart: () => chaindo(chain, 'complete', 'restart'),
+                add() {
+                  chain.anims = chain.anims.concat(flattenArr(arguments));
+                  chain.anims.forEach(anim => {
+                    anim.pause(true);
+                    anim.seek(0);
+                  });
+                  return chain;
+                },
+                remove(anim) {
+                    if (includes(chain.anims, anim)) chain.anims = chain.anims.filter(a => !Object.is(anim, a));
+                    chain.anims.forEach(anim => {
+                      anim.pause(true);
+                      anim.seek(0);
+                    });
+                    return chain;
+                },
+                Do: (event, action) => chaindo(chain.anims, event, action, chain),
+            };
+        return chain;
     }
 
     // Remove on one or multiple targets from all active animations.
 
     animation.remove = targets => {
         targets = filterTargets(targets);
-        for (let i = animations.length - 1; i >= 0; i--) {
-            let animation = animations[i],
-                tweens = animation.tweens;
-            for (let t = animation.tweens.length - 1; t >= 0; t--) {
-                let tween = animation.tweens[t];
+        animations.forEach(animation => {
+            animation.tweens.forEach((tween, t) => {
                 for (let a = tween.animatables.length - 1; a >= 0; a--) {
                     if (includes(targets, tween.animatables[a].target)) {
                         tween.animatables.splice(a, 1);
@@ -692,8 +687,8 @@
                         if (!animation.tweens.length) animation.pause(true);
                     }
                 }
-            }
-        }
+            });
+        });
     }
 
     animation.speed = 1;
@@ -703,7 +698,6 @@
     animation.path = getPathProps;
     animation.random = random;
     animation.includes = includes;
-    animation.cloneObj = cloneObj;
     animation.mergeObjs = mergeObjs;
     animation.flattenArr = flattenArr;
     animation.dropArrDupes = dropArrDupes;
