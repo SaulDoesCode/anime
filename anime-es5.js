@@ -1,4 +1,3 @@
-var _this = this;
 /**
  * http://anime-js.com
  * JavaScript animation engine
@@ -79,18 +78,15 @@ var _this = this;
       }
     },
     curry = function(fn, ctx) {
-      var arity = fn.length,
-        curried = function() {
-          for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {
-            args[_key] = arguments[_key];
-          }
-          return args.length < arity ? function() {
-            for (var _len2 = arguments.length, more = Array(_len2), _key2 = 0; _key2 < _len2; _key2++) {
-              more[_key2] = arguments[_key2];
-            }
-            return curried.apply(null, args.concat(more));
-          } : fn.apply(ctx || _this, args);
-        };
+      var arity = fn.length;
+
+      function curried() {
+        var args = slice(arguments);
+        return args.length < arity ? function() {
+          var more = slice(arguments);
+          return curried.apply(null, args.concat(more));
+        } : fn.apply(ctx || this, args);
+      }
       return curried;
     },
     iseq = curry(function(a, b) {
@@ -636,7 +632,8 @@ var _this = this;
         return anim;
       };
       anim.play = function(params) {
-        if (params) anim = mergeObjs(createAnimation(mergeObjs(params, anim.settings)), anim); //time.start = performance.now();
+        anim.pause(true);
+        if (params) anim = mergeObjs(createAnimation(mergeObjs(params, anim.settings)), anim);
         time.start = 0;
         time.last = anim.ended ? 0 : anim.currentTime;
         var s = anim.settings;
@@ -741,6 +738,7 @@ var _this = this;
   animation.path = getPathProps;
   animation.random = random;
   animation.curry = curry;
+  animation.is = is;
   animation.includes = includes;
   animation.mergeObjs = mergeObjs;
   animation.flattenArr = flattenArr;

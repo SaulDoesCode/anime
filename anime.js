@@ -55,8 +55,14 @@
         },
 
         curry = (fn, ctx) => {
-            const arity = fn.length,
-                curried = (...args) => args.length < arity ? (...more) => curried.apply(null,args.concat(more)) : fn.apply(ctx || this, args);
+            const arity = fn.length;
+            function curried() {
+                const args = slice(arguments);
+                return args.length < arity ? function () {
+                    const more = slice(arguments);
+                    return curried.apply(null, args.concat(more))
+                } : fn.apply(ctx || this, args);
+            }
             return curried;
         },
         iseq = curry((a, b) => a === b);
@@ -598,8 +604,8 @@
         };
 
         anim.play = params => {
+            anim.pause(true);
             if (params) anim = mergeObjs(createAnimation(mergeObjs(params, anim.settings)), anim);
-            //time.start = performance.now();
             time.start = 0;
             time.last = anim.ended ? 0 : anim.currentTime;
             let s = anim.settings;
@@ -699,6 +705,7 @@
     animation.path = getPathProps;
     animation.random = random;
     animation.curry = curry;
+    animation.is = is;
     animation.includes = includes;
     animation.mergeObjs = mergeObjs;
     animation.flattenArr = flattenArr;
