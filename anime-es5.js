@@ -82,7 +82,28 @@
       color: function(a) {
         return is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a);
       }
-    }; // Utils
+    },
+    curry = function(fn) {
+      var arity = fn.length,
+        curried = function() {
+          for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {
+            args[_key] = arguments[_key];
+          }
+          return args.length < arity ? function() {
+            for (var _len2 = arguments.length, more = Array(_len2), _key2 = 0; _key2 < _len2; _key2++) {
+              more[_key2] = arguments[_key2];
+            }
+            return curried.apply(undefined, args.concat(more));
+          } : fn.apply(undefined, args);
+        };
+      return curried;
+    },
+    iseq = curry(function(a, b) {
+      return a === b;
+    }),
+    or = curry(function(a, b) {
+      return a || b;
+    }); // Utils
   /**
    * checks if an array or arraylike object
    * contains a certain value
@@ -93,9 +114,7 @@
   function includes(arr, searchElement) {
     if (arr.includes) return arr.includes(searchElement);
     if (!is.array(arr)) arr = [].slice.call(arr);
-    return !arr.length ? false : arr.some(function(a) {
-      return a === searchElement;
-    });
+    return !arr.length ? false : arr.some(iseq(searchElement));
   } // Easings functions adapted from http://jqueryui.com/
   var easings = function() {
       var eases = {},
@@ -193,13 +212,6 @@
         return context.indexOf(item) === pos;
       });
     }, // Objects
-    cloneObj = function(o) {
-      var newObject = {};
-      for (var p in o) {
-        newObject[p] = o[p];
-      }
-      return newObject;
-    },
     mergeObjs = function(o1, o2) {
       for (var p in o2) {
         o1[p] = !is.undef(o1[p]) ? o1[p] : o2[p];
@@ -379,7 +391,7 @@
       var props = [];
       for (var p in params) {
         if (!defaultSettings.hasOwnProperty(p) && p !== 'targets') {
-          var prop = is.object(params[p]) ? cloneObj(params[p]) : {
+          var prop = is.object(params[p]) ? Object.create(params[p]) : {
             value: params[p]
           };
           prop.name = p;
@@ -418,7 +430,7 @@
           var animType = getAnimationType(target, prop.name);
           if (animType) {
             var values = getPropertiesValues(target, prop.name, prop.value, i),
-              tween = cloneObj(prop);
+              tween = Object.create(prop);
             tween.animatables = animatable;
             tween.type = animType;
             tween.from = getTweenValues(prop.name, values, tween.type, target).from;
@@ -436,7 +448,7 @@
       var tweensProps = getTweensProps(animatables, props),
         splittedProps = groupArrayByProps(tweensProps, ['name', 'from', 'to', 'delay', 'duration']);
       return splittedProps.map(function(tweenProps) {
-        var tween = cloneObj(tweenProps[0]);
+        var tween = Object.create(tweenProps[0]);
         tween.animatables = tweenProps.map(function(p) {
           return p.animatables;
         });
@@ -520,16 +532,18 @@
         tween.currentValue = getTweenProgress(tween, time);
         var progress = tween.currentValue;
         tween.animatables.forEach(function(animatable) {
-          var id = animatable.id;
+          var id = animatable.id,
+            tname = tween.name,
+            target = animatable.target;
           switch (tween.type) {
             case 'css':
-              animatable.target.style[tween.name] = progress;
+              target.style[tname] = progress;
               break;
             case 'attribute':
-              animatable.target.setAttribute(tween.name, progress);
+              target.setAttribute(tname, progress);
               break;
             case 'object':
-              animatable.target[tween.name] = progress;
+              target[tname] = progress;
               break;
             case 'transform':
               if (!transforms) transforms = {};
@@ -539,10 +553,10 @@
           }
         });
       });
-      if (transforms) // for (let t in transforms) anim.animatables[t].target.style[transform] = transforms[t].join(' ');
+      if (transforms)
         for (var t in transforms) {
-        anim.animatables[t].target.style.transform = transforms[t].join(' ');
-      }
+          anim.animatables[t].target.style.transform = transforms[t].join(' ');
+        } // for (let t in transforms) anim.animatables[t].target.style[transform] = transforms[t].join(' ');
       emit('update', anim);
     }, // Animation
     createAnimation = function(params) {
@@ -562,7 +576,7 @@
       })) : params.duration / animation.speed;
       return eventsys(anim);
     },
-    animations = [],
+    animations = new Set(),
     engine = {
       raf: 0,
       play: function() {
@@ -573,9 +587,9 @@
         engine.raf = 0;
       },
       step: function(time) {
-        for (var i = 0; i < animations.length; i++) {
-          animations[i].tick(time);
-        }
+        animations.forEach(function(anim) {
+          return anim.tick(time);
+        });
         engine.play();
       }
     },
@@ -585,7 +599,7 @@
         anim = createAnimation(params);
       if (autostop) anim.settings.autoplay = false;
       events.forEach(function(type) {
-        if (is.func(anim.settings[type])) anim[type == 'update' ? 'on' : '_once'](type, anim.settings[type]);
+        if (is.func(anim.settings[type])) anim[includes(type, 'update', 'interloop') ? 'on' : '_once'](type, anim.settings[type]);
         Object.defineProperty(anim, type, {
           get: function() {
             return new Promise(function(pass) {
@@ -593,7 +607,7 @@
             });
           },
           set: function(fn) {
-            if (is.func(fn)) anim[type == 'update' ? 'on' : '_once'](type, fn);
+            if (is.func(fn)) anim[includes(type, 'update', 'interloop') ? 'on' : '_once'](type, fn);
           }
         });
       });
@@ -608,6 +622,7 @@
               time.start = now;
               if (s.direction === 'alternate') reverseTweens(anim, true);
               if (is.number(s.loop)) s.loop--;
+              emit('interloop', anim);
             } else {
               anim.ended = true;
               anim.pause(true);
@@ -625,9 +640,8 @@
         if (!internal) emit('pause', anim);
         anim.running = false;
         removeWillChange(anim);
-        var i = animations.indexOf(anim);
-        if (i > -1) animations.splice(i, 1);
-        if (!animations.length) engine.pause();
+        animations.delete(anim);
+        if (!animations.size) engine.pause();
         return anim;
       };
       anim.play = function(params) {
@@ -640,7 +654,7 @@
         if (s.direction === 'reverse') reverseTweens(anim);
         if (s.direction === 'alternate' && !s.loop) s.loop = 1;
         setWillChange(anim);
-        animations.push(anim);
+        animations.add(anim);
         if (engine.raf == 0) engine.play();
         return anim;
       };
@@ -655,78 +669,79 @@
       return anim;
     }; // Strings
   // Public
-  /*const curry = fn => {
-          const arity = fn.length,
-              curried = (...args) => args.length < arity ? (...more) => curried(...args, ...more) : fn(...args);
-          return curried;
-      };*/
   animation.all = function(event) {
     return Promise.all(flattenArr(arguments).slice(1).map(function(anim) {
       return anim.once(event);
     }));
   };
 
-  function chaindo(anims, event, action) {
+  function chaindo(chain, event, action) {
     var actionfn = false;
     if (is.func(action)) actionfn = true;
-    if (event == true) anims.forEach(function(anim) {
+    if (event == true) chain.anims.forEach(function(anim) {
       actionfn ? action(anim) : anim[action]();
     });
     var next = function(i) {
       return function() {
-        if (anims[i]) {
-          anims[i]._once(event, next(i == 0 ? 1 : i + 1));
-          actionfn ? action(anims[i]) : anims[i][action]();
+        if (chain.anims[i]) {
+          actionfn ? action(chain.anims[i]) : chain.anims[i][action]();
+          chain.anims[i]._once(event, next(i == 0 ? 1 : i + 1));
         }
+        return chain;
       };
     };
-    next(0)();
-    return anims;
+    return next(0)();
   }
   animation.chain = function() {
-    var anims = flattenArr(arguments);
-    return {
-      play: function() {
-        return chaindo(anims, 'complete', 'play');
-      },
-      pause: function() {
-        return chaindo(anims, true, 'pause');
-      },
-      restart: function() {
-        return chaindo(anims, true, 'restart');
-      },
-      stop: function() {
-        return chaindo(anims, true, 'stop');
-      },
-      add: function() {
-        anims.concat(flattenArr(arguments));
-      },
-      remove: function(anim) {
-        if (includes(anims, anim)) anims = anims.filter(function(a) {
-          return !Object.is(anim, a);
-        });
-      },
-      Do: function(event, action) {
-        return chaindo(anims, event, action);
-      }
-    };
+    var anims = flattenArr(arguments),
+      chain = {
+        anims: anims,
+        play: function() {
+          return chaindo(chain, 'complete', 'play');
+        },
+        pause: function() {
+          return chaindo(chain, true, 'pause');
+        },
+        restart: function() {
+          return chaindo(chain, 'complete', 'restart');
+        },
+        add: function() {
+          chain.anims = chain.anims.concat(flattenArr(arguments));
+          chain.anims.forEach(function(anim) {
+            anim.pause(true);
+            anim.seek(0);
+          });
+          return chain;
+        },
+        remove: function(anim) {
+          if (includes(chain.anims, anim)) chain.anims = chain.anims.filter(function(a) {
+            return !Object.is(anim, a);
+          });
+          chain.anims.forEach(function(anim) {
+            anim.pause(true);
+            anim.seek(0);
+          });
+          return chain;
+        },
+        Do: function(event, action) {
+          return chaindo(chain.anims, event, action, chain);
+        }
+      };
+    return chain;
   }; // Remove on one or multiple targets from all active animations.
   animation.remove = function(targets) {
     targets = filterTargets(targets);
-    for (var i = animations.length - 1; i >= 0; i--) {
-      var _animation = animations[i],
-        tweens = _animation.tweens;
-      for (var t = _animation.tweens.length - 1; t >= 0; t--) {
-        var tween = _animation.tweens[t];
+    animations.forEach(function(animation) {
+      animation.tweens.forEach(function(tween, t) {
         for (var a = tween.animatables.length - 1; a >= 0; a--) {
           if (includes(targets, tween.animatables[a].target)) {
             tween.animatables.splice(a, 1);
-            if (!tween.animatables.length) _animation.tweens.splice(t, 1);
-            if (!_animation.tweens.length) _animation.pause(true);
+            if (!tween.animatables.length) animation.tweens.splice(t, 1);
+            if (!animation.tweens.length) animation.pause(true);
           }
         }
-      }
-    }
+      });
+    });
   };
   animation.speed = 1;
   animation.list = animations;
@@ -735,7 +750,6 @@
   animation.path = getPathProps;
   animation.random = random;
   animation.includes = includes;
-  animation.cloneObj = cloneObj;
   animation.mergeObjs = mergeObjs;
   animation.flattenArr = flattenArr;
   animation.dropArrDupes = dropArrDupes;
