@@ -18,7 +18,8 @@
 }(this, () => {
 
     // Defaults
-    const undef = undefined,
+    const slice = (ctx, i) => Array.prototype.slice.call(ctx, i || 0),
+        undef = undefined,
         validTransforms = ['translateX', 'translateY', 'translateZ', 'rotate', 'rotateX', 'rotateY', 'rotateZ', 'scale', 'scaleX', 'scaleY', 'scaleZ', 'skewX', 'skewY'],
         defaultSettings = {
             duration: 1000,
@@ -30,32 +31,11 @@
             reversed: false,
             elasticity: 400,
             round: false
-        };
-
-    // Utils
-
-    const is = {
-            array: Array.isArray,
-            object: a => includes(Object.prototype.toString.call(a), 'Object'),
-            html: a => (a instanceof NodeList || a instanceof HTMLCollection),
-            node: a => a.nodeType,
-            bool: a => typeof a === 'boolean',
-            svg: a => a instanceof SVGElement,
-            dom: a => is.node(a) || is.svg(a),
-            number: a => !isNaN(parseInt(a)),
-            string: a => typeof a === 'string',
-            func: a => typeof a === 'function',
-            undef: a => typeof a === 'undefined',
-            null: a => typeof a === 'null',
-            hex: a => /(^#[0-9A-F]{6}$)|(^#[0-9A-F]{3}$)/i.test(a),
-            rgb: a => /^rgb/.test(a),
-            rgba: a => /^rgba/.test(a),
-            hsl: a => /^hsl/.test(a),
-            color: a => (is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a))
         },
 
         curry = (fn, ctx) => {
             const arity = fn.length;
+
             function curried() {
                 const args = slice(arguments);
                 return args.length < arity ? function () {
@@ -67,6 +47,28 @@
         },
         iseq = curry((a, b) => a === b);
 
+    // Utils
+
+    const is = {
+        array: Array.isArray,
+        object: a => includes(Object.prototype.toString.call(a), 'Object'),
+        html: a => (a instanceof NodeList || a instanceof HTMLCollection),
+        node: a => a.nodeType,
+        bool: a => typeof a === 'boolean',
+        svg: a => a instanceof SVGElement,
+        dom: a => is.node(a) || is.svg(a),
+        number: a => !isNaN(parseInt(a)),
+        string: a => typeof a === 'string',
+        func: a => typeof a === 'function',
+        undef: a => typeof a === 'undefined',
+        null: a => typeof a === 'null',
+        hex: a => /(^#[0-9A-F]{6}$)|(^#[0-9A-F]{3}$)/i.test(a),
+        rgb: a => /^rgb/.test(a),
+        rgba: a => /^rgba/.test(a),
+        hsl: a => /^hsl/.test(a),
+        color: a => (is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a))
+    };
+
     /**
      * checks if an array or arraylike object
      * contains a certain value
@@ -76,7 +78,7 @@
      */
     function includes(arr, searchElement) {
         if (arr.includes) return arr.includes(searchElement);
-        if (!is.array(arr)) arr = [].slice.call(arr);
+        if (!is.array(arr)) arr = slice(arr);
         return !arr.length ? false : arr.some(iseq(searchElement));
     }
 
@@ -135,7 +137,7 @@
         toArray = o => {
             if (is.array(o)) return o;
             if (is.string(o)) o = selectString(o) || o;
-            if (is.html(o)) return [].slice.call(o);
+            if (is.html(o)) return slice(o);
             return [o];
         },
 
@@ -213,7 +215,7 @@
         emit = function (type, anim) {
             if (type == 'begin') anim.started = true;
             if (anim.listeners.size > 0) {
-                let args = [].slice.call(arguments, 1);
+                let args = slice(arguments, 1);
                 anim.listeners.forEach(ln => {
                     if (ln.type == type) ln.apply(anim, args.concat(ln.handle));
                 });

@@ -13,7 +13,10 @@
   else if (typeof module === 'object' && module.exports) module.exports = factory(); // Browser globals (root is window)
   else root.anime = factory();
 })(this, function() { // Defaults
-  var undef = undefined,
+  var slice = function(ctx, i) {
+      return Array.prototype.slice.call(ctx, i || 0);
+    },
+    undef = undefined,
     validTransforms = ['translateX', 'translateY', 'translateZ', 'rotate', 'rotateX', 'rotateY', 'rotateZ', 'scale', 'scaleX', 'scaleY', 'scaleZ', 'skewX', 'skewY'],
     defaultSettings = {
       duration: 1000,
@@ -26,6 +29,21 @@
       elasticity: 400,
       round: false
     },
+    curry = function(fn, ctx) {
+      var arity = fn.length;
+
+      function curried() {
+        var args = slice(arguments);
+        return args.length < arity ? function() {
+          var more = slice(arguments);
+          return curried.apply(null, args.concat(more));
+        } : fn.apply(ctx || this, args);
+      }
+      return curried;
+    },
+    iseq = curry(function(a, b) {
+      return a === b;
+    }),
     is = {
       array: Array.isArray,
       object: function(a) {
@@ -76,22 +94,7 @@
       color: function(a) {
         return is.hex(a) || is.rgb(a) || is.rgba(a) || is.hsl(a);
       }
-    },
-    curry = function(fn, ctx) {
-      var arity = fn.length;
-
-      function curried() {
-        var args = slice(arguments);
-        return args.length < arity ? function() {
-          var more = slice(arguments);
-          return curried.apply(null, args.concat(more));
-        } : fn.apply(ctx || this, args);
-      }
-      return curried;
-    },
-    iseq = curry(function(a, b) {
-      return a === b;
-    }); // Utils
+    }; // Utils
   /**
    * checks if an array or arraylike object
    * contains a certain value
@@ -101,7 +104,7 @@
    */
   function includes(arr, searchElement) {
     if (arr.includes) return arr.includes(searchElement);
-    if (!is.array(arr)) arr = [].slice.call(arr);
+    if (!is.array(arr)) arr = slice(arr);
     return !arr.length ? false : arr.some(iseq(searchElement));
   } // Easings functions adapted from http://jqueryui.com/
   var easings = function() {
@@ -174,7 +177,7 @@
     toArray = function(o) {
       if (is.array(o)) return o;
       if (is.string(o)) o = selectString(o) || o;
-      if (is.html(o)) return [].slice.call(o);
+      if (is.html(o)) return slice(o);
       return [o];
     },
     flattenArr = function(arr) {
@@ -263,7 +266,7 @@
       if (type == 'begin') anim.started = true;
       if (anim.listeners.size > 0) {
         (function() {
-          var args = [].slice.call(_arguments, 1);
+          var args = slice(_arguments, 1);
           anim.listeners.forEach(function(ln) {
             if (ln.type == type) ln.apply(anim, args.concat(ln.handle));
           });
